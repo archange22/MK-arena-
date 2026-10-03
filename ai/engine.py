@@ -99,7 +99,7 @@ def format_tournament_answer(question: str, details: dict) -> str:
     name = details.get("name") or "ce tournoi"
 
     if any(word in q for word in ["regle", "regles", "règlement", "reglement", "règle", "respecte", "conditions"]):
-        rules = details.get("rules") or "Aucune règle n'a encore ��té indexée pour ce tournoi."
+        rules = details.get("rules") or "Aucune règle n'a encore été indexée pour ce tournoi."
         return f"📜 Règles de **{name}**\n{rules}"
 
     if any(word in q for word in ["prize", "prizepool", "gain", "recompense", "récompense", "cash", "pool"]):

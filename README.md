@@ -1,14 +1,18 @@
-# NOVA v0.1.3
+# NOVA v0.2
 
-## Ce qui a changé
+## Objectif
 
-- détection NOVA plus stricte et plus fiable ;
-- contexte conversationnel plus utile pour les demandes courtes ;
-- meilleure logique d'indexation des informations de tournois ;
-- mémoire de tournoi plus structurée ;
-- permissions staff appliquées à travers des vérifications de sécurité ;
-- commandes `/nova-status` et `/nova-sync` conservées et stabilisées ;
-- architecture préparée pour les prochaines évolutions sans dépendre d'une API externe.
+La v0.2 vise à rendre NOVA plus naturelle, plus utile et plus fiable dans les conversations Discord réelles.
+
+## Nouvelles améliorations
+
+- meilleure compréhension des formulations variées ;
+- contexte conversationnel plus robuste ;
+- mémoire conversationnelle plus propre ;
+- gestion du message référencé (`reply` / contexte précédent) ;
+- tournois mieux identifiés et mieux recherchés ;
+- permissions staff vérifiées par des contrôles explicites ;
+- architecture prête pour des évolutions sans dépendre d'une API externe.
 
 ## Installation
 
@@ -30,6 +34,6 @@ python main.py
 pytest -q
 ```
 
-## Limite de la version
+## Limite de cette version
 
-Cette version reste une base modulaire, locale, stable et extensible. Elle n'ajoute pas de grand modèle de langage ni de dépendance cloud.
+La v0.2 reste locale et modulaire. Elle n'ajoute pas encore de grand modèle de langage externe ni d'auto-apprentissage non supervisé.

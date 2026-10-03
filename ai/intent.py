@@ -16,7 +16,6 @@ def normalize_text(text: str) -> str:
         "l'": " ",
         "j'ai": "jai",
         "j ai": "jai",
-        "wsh": "wsh",
     }
     for src, dst in replacements.items():
         normalized = normalized.replace(src, dst)
@@ -42,7 +41,7 @@ def detect_intent(text: str) -> str:
         "regle", "reglement", "regles", "participer", "inscription",
         "prizepool", "prize", "equipe", "equipes", "format", "statut",
         "date", "quand commence", "comment fonctionne", "conditions", "scrim",
-        "règle", "règlement", "prizepool", "team"
+        "team"
     ]
     if any(marker in t for marker in tournament_markers):
         return "tournament"
