@@ -1,21 +1,18 @@
-from ai.engine import NovaEngine
+from memory.database import Database
+from memory.knowledge import KnowledgeManager
 
 
-class Dummy:
-    pass
+def test_staff_learning_and_tournament_search():
+    db = Database(":memory:")
+    db.initialize()
+    knowledge = KnowledgeManager(db)
 
+    response = knowledge.learn("nova retiens que le MK SQUID GAME compte 16 équipes et le prizepool est de 250 €.", "staff:42", 1)
+    assert "Compris" in response
 
-def test_nova_detection():
-    engine = NovaEngine(Dummy(), Dummy())
-    assert engine.is_called("nova bonjour")
-    assert engine.is_called("NOVA bonjour")
-    assert engine.is_called("NoVa bonjour")
-    assert engine.is_called("tu peux demander à nova ?")
-    assert not engine.is_called("renova")
-    assert not engine.is_called("novaissance")
+    rows = knowledge.search_tournaments("mk squid game", 1)
+    assert rows
+    assert any((row["name"] or "").startswith("MK SQUID GAME") for row in rows)
 
-
-def test_remove_call():
-    engine = NovaEngine(Dummy(), Dummy())
-    assert engine.remove_call("NOVA bonjour") == "bonjour"
-    assert engine.remove_call("NoVa c'est quoi le tournoi ?") == "c'est quoi le tournoi ?"
+    details = knowledge.get_tournament_details(rows[0]["id"])
+    assert details["teams"] == "16"

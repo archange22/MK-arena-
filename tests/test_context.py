@@ -1,18 +1,36 @@
-from memory.database import Database
-from memory.knowledge import KnowledgeManager
+from ai.engine import NovaEngine
 
 
-def test_staff_learning_and_tournament_search():
-    db = Database(":memory:")
-    db.initialize()
-    knowledge = KnowledgeManager(db)
+class DummyContext:
+    def latest_tournament_hint(self, user_id):
+        return "MK SQUID GAME"
 
-    response = knowledge.learn("nova retiens que le MK SQUID GAME compte 16 équipes et le prizepool est de 250 €.", "staff:42", 1)
-    assert "Compris" in response
 
-    rows = knowledge.search_tournaments("squid game", 1)
-    assert rows
-    assert any(row["name"] == "MK SQUID GAME" for row in rows)
+class DummyKnowledge:
+    def search_tournaments(self, query, guild_id):
+        return [{
+            "id": 1,
+            "name": "MK SQUID GAME",
+            "prizepool": "250 €",
+            "teams": "16",
+            "format": "BO3",
+            "rules": "Règles de base du tournoi",
+            "status": "En cours"
+        }]
 
-    details = knowledge.get_tournament_details(rows[0]["id"])
-    assert details["teams"] == "16"
+    def get_tournament_details(self, tournament_id):
+        return {
+            "id": 1,
+            "name": "MK SQUID GAME",
+            "prizepool": "250 €",
+            "teams": "16",
+            "format": "BO3",
+            "rules": "Règles de base du tournoi",
+            "status": "En cours"
+        }
+
+
+def test_context_hint_used_for_tournament_answers():
+    engine = NovaEngine(DummyKnowledge(), DummyContext())
+    answer = engine.respond(1, 1, "nova et le prizepool ?", reference_context="MK SQUID GAME")
+    assert "250" in answer

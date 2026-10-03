@@ -6,6 +6,7 @@ def normalize_text(text: str) -> str:
     if not text:
         return ""
     normalized = unicodedata.normalize("NFKC", text).lower()
+    normalized = normalized.replace("’", "'").replace("“", '"').replace("”", '"')
     replacements = {
         "ça": "ca",
         "c'est": "c est",
@@ -14,12 +15,11 @@ def normalize_text(text: str) -> str:
         "d'": " ",
         "l'": " ",
         "j'ai": "jai",
-        "tu peux": "tu peux",
-        "c koi": "c koi",
+        "j ai": "jai",
+        "wsh": "wsh",
     }
     for src, dst in replacements.items():
         normalized = normalized.replace(src, dst)
-    normalized = normalized.replace("’", "'").replace("“", '"').replace("”", '"')
     normalized = re.sub(r"[^a-z0-9\s\-]", " ", normalized)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     return normalized
@@ -32,16 +32,17 @@ def detect_intent(text: str) -> str:
 
     greeting_markers = [
         "bonjour", "salut", "hello", "yo", "ca va", "cava", "comment tu vas",
-        "tu es la", "tu es la ?", "tu es la", "on va", "wsh"
+        "tu es la", "on va", "wsh"
     ]
     if any(marker in t for marker in greeting_markers):
         return "greeting"
 
     tournament_markers = [
         "tournoi", "tournois", "squid", "world cup", "champion league",
-        "regle", "reglement", "regles", "règle", "participer", "inscription",
+        "regle", "reglement", "regles", "participer", "inscription",
         "prizepool", "prize", "equipe", "equipes", "format", "statut",
-        "date", "quand commence", "comment fonctionne", "conditions", "scrim"
+        "date", "quand commence", "comment fonctionne", "conditions", "scrim",
+        "règle", "règlement", "prizepool", "team"
     ]
     if any(marker in t for marker in tournament_markers):
         return "tournament"
@@ -49,7 +50,8 @@ def detect_intent(text: str) -> str:
     codm_markers = [
         "codm", "call of duty mobile", "hardpoint", "recherche et destruction",
         "r and d", "rd", "ranked", "control", "battle royale", "scrim",
-        "rotations", "aim", "classe", "arme", "loadout", "mode de jeu"
+        "rotations", "aim", "classe", "arme", "loadout", "mode de jeu",
+        "recherche destruction"
     ]
     if any(marker in t for marker in codm_markers):
         return "codm"

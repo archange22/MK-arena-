@@ -1,72 +1,137 @@
-import sqlite3
-from threading import RLock
+import re
 
 
-class Database:
-    def __init__(self, path):
-        self.path = path
-        self.lock = RLock()
+class KnowledgeManager:
+    def __init__(self, db):
+        self.db = db
 
-    def connect(self):
-        conn = sqlite3.connect(self.path)
-        conn.row_factory = sqlite3.Row
-        return conn
+    def learn(self, text, source, guild_id):
+        cleaned = (text or "").strip()
+        if not cleaned:
+            return "Je n'ai rien à enregistrer."
 
-    def initialize(self):
-        with self.lock, self.connect() as c:
-            c.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS conversations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS knowledge (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    guild_id INTEGER NOT NULL,
-                    topic TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    source TEXT,
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS tournaments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    guild_id INTEGER NOT NULL,
-                    channel_id INTEGER NOT NULL DEFAULT 0,
-                    name TEXT NOT NULL,
-                    date TEXT,
-                    teams TEXT,
-                    prizepool TEXT,
-                    format TEXT,
-                    status TEXT,
-                    rules TEXT,
-                    source_message_id INTEGER,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS tournament_messages (
-                    message_id INTEGER PRIMARY KEY,
-                    channel_id INTEGER NOT NULL,
-                    content TEXT NOT NULL,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE INDEX IF NOT EXISTS idx_knowledge_guild ON knowledge(guild_id);
-                CREATE INDEX IF NOT EXISTS idx_tournaments_guild ON tournaments(guild_id);
-                CREATE INDEX IF NOT EXISTS idx_tournaments_name ON tournaments(name);
-                """
-            )
+        topic = self._extract_topic(cleaned) or "staff"
+        self.db.execute(
+            "INSERT INTO knowledge(guild_id, topic, content, source) VALUES (?, ?, ?, ?)",
+            (guild_id, topic, cleaned, source),
+        )
 
-    def execute(self, sql, params=()):
-        with self.lock, self.connect() as c:
-            cur = c.execute(sql, params)
-            return cur.lastrowid
+        details = self._extract_tournament_fields(cleaned)
+        if details:
+            self._upsert_tournament(guild_id, topic, details)
 
-    def query(self, sql, params=()):
-        with self.lock, self.connect() as c:
-            return c.execute(sql, params).fetchall()
+        return f"Compris 😎 J'ai enregistré cette information pour **{topic}**."
 
-    def count_tournaments(self):
-        row = self.query("SELECT COUNT(*) AS n FROM tournaments")[0]
-        return row["n"]
+    def _extract_topic(self, text):
+        match = re.search(r"(?:tournoi|tournament|mk\s+[a-z0-9à-ÿ _'-]+)", text, re.IGNORECASE)
+        if match:
+            topic = match.group(0).strip().replace("tournoi ", "").replace("tournament ", "")
+            topic = re.sub(r"\s+", " ", topic).strip()
+            if topic:
+                return topic.title()
+        if "squid" in text.lower():
+            return "MK SQUID GAME"
+        return None
+
+    def _extract_tournament_fields(self, text):
+        details = {}
+
+        teams_match = re.search(r"(?:équipes|equipes|teams?)\s*(?:actuellement\s*)?(?:sont|sont\s*\=?\s*|est|\=)?\s*(\d+)", text, re.IGNORECASE)
+        if teams_match:
+            details["teams"] = teams_match.group(1)
+
+        prize_match = re.search(r"(?:prizepool|prize\s*pool|prix|récompense|recompense)\s*(?:est|:|=|-)?\s*([^\n\.]+)", text, re.IGNORECASE)
+        if prize_match:
+            details["prizepool"] = prize_match.group(1).strip()
+
+        rules_match = re.search(r"(?:règles|regles|règlement|reglement)\s*(?:est|:|=|-)?\s*([^\n\.]+)", text, re.IGNORECASE)
+        if rules_match:
+            details["rules"] = rules_match.group(1).strip()
+
+        date_match = re.search(r"(?:date|jour|commence|debut|début)\s*(?:est|:|=|-)?\s*([^\n\.]+)", text, re.IGNORECASE)
+        if date_match:
+            details["date"] = date_match.group(1).strip()
+
+        format_match = re.search(r"(?:format)\s*(?:est|:|=|-)?\s*([^\n\.]+)", text, re.IGNORECASE)
+        if format_match:
+            details["format"] = format_match.group(1).strip()
+
+        status_match = re.search(r"(?:statut|status)\s*(?:est|:|=|-)?\s*([^\n\.]+)", text, re.IGNORECASE)
+        if status_match:
+            details["status"] = status_match.group(1).strip()
+
+        return details
+
+    def _upsert_tournament(self, guild_id, name, details):
+        existing = self.db.query(
+            "SELECT * FROM tournaments WHERE guild_id=? AND name=? ORDER BY updated_at DESC LIMIT 1",
+            (guild_id, name),
+        )
+
+        if existing:
+            row = dict(existing[0])
+            assignments = []
+            values = []
+            for key in ["date", "teams", "prizepool", "format", "status", "rules"]:
+                if key in details and details[key] is not None:
+                    assignments.append(f"{key} = ?")
+                    values.append(details[key])
+            if assignments:
+                values.extend([guild_id, name, row["id"]])
+                self.db.execute(
+                    f"UPDATE tournaments SET {', '.join(assignments)}, updated_at=CURRENT_TIMESTAMP WHERE guild_id=? AND name=? AND id=?",
+                    values,
+                )
+            return
+
+        self.db.execute(
+            "INSERT INTO tournaments(guild_id, channel_id, name, date, teams, prizepool, format, status, rules) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                guild_id,
+                name,
+                details.get("date"),
+                details.get("teams"),
+                details.get("prizepool"),
+                details.get("format"),
+                details.get("status"),
+                details.get("rules"),
+            ),
+        )
+
+    def search_tournaments(self, query, guild_id):
+        rows = self.db.query(
+            "SELECT * FROM tournaments WHERE guild_id=? ORDER BY updated_at DESC",
+            (guild_id,),
+        )
+        q = re.sub(r"\s+", " ", (query or "").lower().strip())
+        if not q:
+            return []
+
+        scored = []
+        for row in rows:
+            item = dict(row)
+            name = (item.get("name") or "").lower()
+            score = 0
+            if q in name:
+                score += 100
+            for token in re.findall(r"[a-z0-9à-ÿ]+", name):
+                if len(token) >= 3 and token in q:
+                    score += 10
+            for field in ["rules", "format", "status", "date", "prizepool", "teams"]:
+                value = item.get(field) or ""
+                tokens = re.findall(r"[a-z0-9à-ÿ]+", value.lower())
+                if any(token in q for token in tokens):
+                    score += 3
+            if score > 0:
+                scored.append((score, item))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        if not scored:
+            for w in ["tournoi", "regle", "reglement", "equipes", "prize", "participer", "format"]:
+                if w in q:
+                    return [dict(r) for r in rows[:5]]
+        return [item for _, item in scored[:5]]
+
+    def get_tournament_details(self, tournament_id):
+        rows = self.db.query("SELECT * FROM tournaments WHERE id=?", (tournament_id,))
+        return dict(rows[0]) if rows else {}
