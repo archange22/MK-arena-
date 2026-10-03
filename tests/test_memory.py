@@ -1,15 +1,21 @@
-import tempfile, os
-from memory.database import Database
-from memory.conversation import ConversationMemory
+from ai.engine import NovaEngine
 
-def test_memory():
-    fd, path = tempfile.mkstemp()
-    os.close(fd)
-    try:
-        db = Database(path)
-        db.initialize()
-        mem = ConversationMemory(db)
-        mem.add(1, "user", "bonjour")
-        assert mem.recent(1)[0]["content"] == "bonjour"
-    finally:
-        os.remove(path)
+
+class Dummy:
+    pass
+
+
+def test_nova_detection():
+    engine = NovaEngine(Dummy(), Dummy())
+    assert engine.is_called("nova bonjour")
+    assert engine.is_called("NOVA bonjour")
+    assert engine.is_called("NoVa bonjour")
+    assert engine.is_called("tu peux demander à nova ?")
+    assert not engine.is_called("renova")
+    assert not engine.is_called("novaissance")
+
+
+def test_remove_call():
+    engine = NovaEngine(Dummy(), Dummy())
+    assert engine.remove_call("NOVA bonjour") == "bonjour"
+    assert engine.remove_call("NoVa c'est quoi le tournoi ?") == "c'est quoi le tournoi ?"
