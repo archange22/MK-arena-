@@ -66,3 +66,6 @@ class ConversationMemory:
                 if alias in text:
                     return canonical
         return None
+
+    def clear(self, user_id):
+        self.db.execute("DELETE FROM conversations WHERE user_id=?", (user_id,))

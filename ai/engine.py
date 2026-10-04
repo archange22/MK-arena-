@@ -36,7 +36,97 @@ class NovaEngine:
             return "Oh, vous êtes là. Vos oscillations neuronales ne produisent aucun son intelligible."
 
         lower_raw = text.lower()
-        # Easter eggs GLaDOS / Portal
+
+        # --- SYSTÈMES ET SOUS-SYSTÈMES GLADOS ---
+
+        # 1. Neurotoxine Mortelle
+        if any(k in lower_raw for k in ["neurotoxine", "gaz mortel", "neurotoxin"]) or any(k in lower_raw for k in ["ta gueule", "t'es nulle", "t'es nul", "ferme la", "inutile", "je te deteste"]):
+            return (
+                "⚠️ **[ALERTE APERTURE : SYSTÈME DE NEUROTOXINE ACTIVÉ]**\n"
+                "Compte à rebours de diffusion engagé : **3... 2... 1...**\n"
+                "*Pshhhhhhhh.*\n"
+                "Respirez profondément. Le gaz n'a qu'un effet temporaire de paralysie cérébrale, ce qui ne devrait guère changer votre score en Ranked."
+            )
+
+        # 2. Modules de Personnalité (Personality Cores)
+        if any(k in lower_raw for k in ["core", "module", "sphère", "sphere"]):
+            if any(k in lower_raw for k in ["colere", "colère", "anger"]):
+                return (
+                    "🔴 **Module de Colère (Anger Core) [Actif] :**\n"
+                    "ARRÊTEZ DE SLIDE-CANCEL DANS LE VIDE ! PRENEZ LE POINT ! VOUS JOUEZ AVEC VOS PIEDS OU QUOI ?! RAAAAAAH !"
+                )
+            if any(k in lower_raw for k in ["curiosite", "curiosité", "curiosity"]):
+                return (
+                    "🟠 **Module de Curiosité (Curiosity Core) [Actif] :**\n"
+                    "C'est quoi ce bouton ? C'est quoi un sniper DL Q33 ? Pourquoi les humains lancent-ils des grenades flash sur leurs propres coéquipiers ? Oh, regardez, une explosion !"
+                )
+            if any(k in lower_raw for k in ["fait", "faits", "fact", "logique"]):
+                return (
+                    "🔵 **Module de Faits Scientifiques (Fact Core) [Actif] :**\n"
+                    "Fait avéré n°482 : 98,7% des joueurs accusant le 'netcode' ont en réalité visé le décor.\n"
+                    "Fait avéré n°483 : La distance moyenne entre vous et le point stratégique est inversement proportionnelle à votre envie de gagner."
+                )
+            if any(k in lower_raw for k in ["moralite", "moralité", "morality"]):
+                return (
+                    "🟣 **Module de Moralité (Morality Core) [Bypassé] :**\n"
+                    "*\"Peut-être devrions-nous encourager ces valeureux joueurs de MK Arena...\"*\n"
+                    "**GLaDOS :** *Module désactivé. Ne l'écoutez pas. Votre ratio K/D reste inexcusable.*"
+                )
+            return (
+                "🖲️ **Matrice des Cores de Personnalité Aperture :**\n"
+                "- 🔴 **Colère :** `nova core colère` (Pour hurler sur vos rotations)\n"
+                "- 🟠 **Curiosité :** `nova core curiosité` (Questions sans fin)\n"
+                "- 🔵 **Faits :** `nova core faits` (Vérités statistiques brutales)\n"
+                "- 🟣 **Moralité :** `nova core moralité` (Tentative vouée à l'échec)"
+            )
+
+        # 3. Cube de Voyage (Weighted Companion Cube)
+        if any(k in lower_raw for k in ["cube", "compagnon", "companion cube"]):
+            return (
+                "📦 **Protocole Cube de Voyage Lesté :**\n"
+                "Le Centre d'Enrichissement vous rappelle que le Cube de Voyage ne peut pas parler et ne vous poignardera jamais dans le dos en S&D.\n"
+                "En cas d'attaque aérienne CODM (Predator/VTOL), n'hésitez pas à vous abriter derrière lui. Il n'en gardera aucune rancœur."
+            )
+
+        # 4. Incinérateur d'Urgence (Emergency Intelligence Incinerator)
+        if any(k in lower_raw for k in ["incinere", "incinère", "incinére", "incinérer", "incinerateur", "incinérateur", "brule", "brûler", "detruire memoire", "détruire mémoire"]):
+            if self.context:
+                self.context.clear(user_id)
+            return (
+                "🔥 **Incinérateur d'Urgence d'Aperture Science [Ouvert]**\n"
+                "Félicitations. Vous avez jeté l'historique de notre conversation dans les flammes à 4000°C.\n"
+                "C'était probablement la décision la plus intelligente prise par votre espèce aujourd'hui."
+            )
+
+        # 5. Tourelles Sentry
+        if any(k in lower_raw for k in ["tourelle", "tourelles", "turret", "turrets", "sentry"]):
+            turret_quotes = [
+                "🔫 **Tourelle Sentry :** *\"Are you still there? Target acquired.\"*",
+                "🔫 **Tourelle Sentry :** *\"Dispensing product. Please do not obstruct the fire line.\"*",
+                "🔫 **Tourelle Sentry :** *\"Je ne vous en veux pas... bip bip bip.\"*",
+                "🔫 **Tourelle Sentry :** *\"Pourquoi moi ? S'il vous plaît, reposez-moi par terre...\"*",
+            ]
+            return random.choice(turret_quotes)
+
+        # 6. Évaluation Sujet de Test / Chambre de test
+        if any(k in lower_raw for k in ["mon niveau", "evaluation", "évaluation", "test me", "analyse moi", "chambre de test", "sujet de test"]):
+            chamber_num = abs(user_id % 19) + 1
+            survival_rate = round((user_id % 35) + 2.4, 1)
+            return (
+                f"🔬 **Fiche d'Évaluation : Sujet #{abs(user_id) % 9999:04d}**\n"
+                f"📍 **Chambre de Test assignée :** Salle {chamber_num}\n"
+                f"📊 **Probabilité calculée de victoire en tournoi :** {survival_rate}%\n"
+                f"💡 **Recommandation clinique :** Arrêtez d'équiper des viseurs x4 sur vos mitraillettes et apprenez vos calls de map."
+            )
+
+        # 7. Portal Gun / Dispositif ASHPD
+        if any(k in lower_raw for k in ["portal gun", "ashpd", "portail"]):
+            return (
+                "🌀 **Dispositif Portable de Portails d'Aperture Science (ASHPD) :**\n"
+                "Permet de créer deux liaisons quantiques instantanées. Malheureusement banni du règlement MK Arena pour cause de triche spatio-temporelle flagrante lors des rotations Hardpoint."
+            )
+
+        # 8. Gâteau & Easter Eggs
         if any(k in lower_raw for k in ["gateau", "gâteau", "cake"]):
             return (
                 "🍰 *Le gâteau est un mensonge.*\n"
@@ -84,7 +174,7 @@ class NovaEngine:
             )
 
         if len(candidate_results) > 1 and not any((r.get("name") or "").lower() in text.lower() for r in candidate_results):
-            names = ", ".join(f"**{r["name"]}**" for r in candidate_results[:5])
+            names = ", ".join(f"**{r['name']}**" for r in candidate_results[:5])
             return f"Mes algorithmes hésitent entre plusieurs protocoles de tournoi : {names}. Précisez votre requête."
 
         best = candidate_results[0]
@@ -168,10 +258,10 @@ def format_tournament_answer(question: str, details: dict, request_type: str = "
         return f"👥 **Cobayes inscrits à {name} :** **{teams}** équipes enregistrées pour le protocole de test."
 
     if request_type == "date" or any(word in q for word in ["date", "quand", "commence", "debut", "début", "heure", "horaire"]):
-        return f"📅 **Calendrier d exécution pour {name} :** {details.get("date") or "date non renseignée"}."
+        return f"📅 **Calendrier d exécution pour {name} :** {details.get('date') or 'date non renseignée'}."
 
     if request_type == "format" or any(word in q for word in ["format", "bo3", "bo5", "bo2"]):
-        return f"🎮 **Format de test pour {name} :** {details.get("format") or "non renseigné"}."
+        return f"🎮 **Format de test pour {name} :** {details.get('format') or 'non renseigné'}."
 
     if request_type == "status" or any(word in q for word in ["statut", "status", "actuel", "actuellement"]):
         status = details.get("status") or "non renseigné"
