@@ -1,148 +1,99 @@
-# 🤖 NOVA v2.0 — Personal Autonomous AI & Coding Engine (MK ARENA)
+# 🤖 NOVA v2.5 — Architecture Unifiée : DraftBot + GLaDOS + Coding Agent & Dashboard v2
 
-## 🌟 Vision du Projet
-
-**NOVA v2.0** transforme le bot Discord de MK ARENA en un véritable agent autonome capable de :
-1. **Comprendre et converser naturellement** avec les utilisateurs Discord ou via API locale.
-2. **Analyser, générer et modifier du code** de manière sécurisée grâce à une boucle fermée d'agentique.
-3. **Tester ses modifications dans un bac à sable (Sandbox)** avec `pytest` avant toute application sur le dépôt principal.
-4. **Auto-corriger ses erreurs** et proposer des améliorations contrôlées via un système de propositions (`proposals/`) et de branches Git.
-5. **Adopter une personnalité dynamique** (Normal, Friendly, Serious, Annoyed et Sarcastic/GLaDOS) réagissant intelligemment aux provocations et pardonnant les excuses.
+> **NOVA** (Personal Artificial Intelligence) est un agent autonome unifié pour **MK ARENA | Events**, combinant les meilleures capacités d'un bot Discord complet (type DraftBot), une personnalité dynamique et sarcastique (type GLaDOS), un moteur de programmation auto-correcteur (Coding Agent) et un Dashboard Web professionnel temps réel prêt pour Firebase Hosting.
 
 ---
 
-## 🏛️ Architecture Globale (v2.0)
+## 🏛️ Architecture Unifiée du Système
 
 ```
-NOVA v2.0
-├── ai/
-│   ├── engine.py              # Moteur unifié & parsing d'instructions
-│   ├── code_agent.py          # Orchestrateur de missions de code
-│   ├── planner.py             # Planificateur multi-étapes (OBSERVE -> PLAN -> ACT -> TEST -> DONE)
-│   ├── reasoning.py          # Diagnostic d'échecs de tests & hypothèses de correction
-│   ├── personality.py        # Moteur d'humeurs (Normal, GLaDOS, Annoyed, Friendly)
-│   ├── context.py            # Mémoire conversationnelle à court terme
-│   └── intent.py             # Détecteur d'intentions
-│
-├── coding/
-│   ├── analyzer.py           # Analyseur AST du projet, modules, classes et fonctions
-│   ├── validator.py          # Barrière de sécurité : fichiers protégés & motifs interdits
-│   ├── editor.py             # Écriture atomique, patch de ligne & rollback automatique
-│   ├── tester.py             # Exécuteur automatisé de pytest avec rapport d'erreurs
-│   ├── sandbox.py            # Bac à sable temporaire pour tester les modifications
-│   └── generator.py          # Générateur de fonctions, classes et tests unitaires
-│
-├── self_improvement/
-│   ├── manager.py            # Chef d'orchestre de la boucle d'auto-amélioration
-│   ├── proposals.py          # Registre des propositions d'amélioration (JSON)
-│   ├── evaluator.py          # Métriques de santé, taux de succès et temps de réponse
-│   └── history.py            # Journal d'audit de chaque version et modification
-│
-├── git_agent/
-│   └── manager.py            # Wrapper Git automatique (branches, commits, rollback)
-│
-├── memory/
-│   ├── database.py           # SQLite persistant
-│   └── conversation.py       # Historique et rancunes par serveur
-│
-├── security/                 # Protection anti-raid, modération et permissions
-├── tournaments/              # Gestion des tournois MK ARENA
-└── tests/                    # Suite de 27 tests unitaires automatisés
+                    NOVA
+                     │
+        ┌────────────┼────────────┐
+        │            │            │
+     DISCORD      DASHBOARD     TERMINAL
+        │            │            │
+        └────────────┼────────────┘
+                     │
+                 NOVA CORE
+                     │
+      ┌──────────────┼──────────────┐
+      │              │              │
+    MEMORY         AGENT          TOOLS
+      │              │              │
+      │        ┌─────┼─────┐        │
+      │      CODE  TESTS  GIT      │
+      │                            │
+      └────────── KNOWLEDGE ───────┘
 ```
 
 ---
 
-## 🚀 Ce que NOVA sait faire (v2.0)
+## 🛡️ 1. Capacités Discord (Inspirées de DraftBot + GLaDOS)
 
-### 1. Agent de Programmation & Boucle d'Auto-Amélioration
-- **Lecture et cartographie du code** : NOVA scanne l'intégralité du projet via AST (`CodeAnalyzer`), identifie les classes, fonctions et dépendances.
-- **Protection & Sécurité stricte** : `CodeValidator` interdit formellement de toucher aux fichiers critiques (`security/`, `main.py`, `.env`) et bloque toute commande destructive (`rm -rf`, `eval`, injection).
-- **Bac à sable (Sandbox)** : toute proposition de modification est clonée dans un espace isolé temporaire et testée avec `pytest`.
-- **Raisonnement d'erreur** : en cas d'échec d'un test, `ReasoningEngine` analyse le traceback, identifie la ligne en cause et propose un correctif.
-- **Historique & Traçabilité** : chaque amélioration validée reçoit un ID unique sous `proposals/` et est enregistrée dans l'historique d'audit.
-- **Intégration Git** : création automatique de branches de fonctionnalités (`nova/improve-...`) et commits standardisés avec auteur NOVA.
+### Modération & Sécurité
+- **Commandes de modération** : `/ban`, bannissement temporaire, `/expulser`, `/avertir`, `/mute`, `/demute`, `/note`, historique des sanctions et journal d'audit.
+- **Auto-modération** : Anti-spam, anti-liens frauduleux, anti-mentions excessives, anti-raid, contrôle des majuscules et suppression automatique configurée.
+- **Accueil & Nouveaux membres** : Messages de bienvenue personnalisés, attribution automatique de rôles et salon de vérification.
 
-### 2. Conversation Naturelle & Personnalité Dynamique
-- Répond aux mentions `@NOVA` et aux messages formulés en langage naturel.
-- Détecte le contexte et permet les questions courtes de suivi (*"Et la date ?"*, *"Tu peux détailler ?"*).
-- **Mode GLaDOS** : riposte sarcastique en cas d'insulte répétée, avec suspension de courtoisie.
-- **Pardon immédiat** : réinitialisation en mode courtois dès que l'utilisateur formule des excuses (*"Pardon Nova"*, *"Désolé"*).
+### Communauté, Économie & Support
+- **Niveaux & XP** : Progression d'expérience basée sur les messages réels, cartes de rangs et récompenses de rôles.
+- **Économie virtuelle** : Pièces virtuelles, récompense quotidienne (`/daily`), boutique de rôles, inventaire et transferts sécurisés.
+- **Support & Interaction** : Système de tickets avec transcripts, signalements anonymes pour le staff, boîte à suggestions avec votes et starboard (`#best-messages`).
+- **Utilitaires** : Salons vocaux temporaires automatiques, rappels (`/rappel`), sauvegardes et messages automatiques planifiés.
 
-### 3. Tournois & Modération MK ARENA
-- Gestion des règles, formats d'équipes et annonces de tournois.
-- Système anti-raid, logs d'avertissements et rôles administratifs.
+### Gaming & Compétition (MK ARENA CODM)
+- **Profils & Stats** : Suivi des statistiques Call of Duty Mobile (KD, matches, rangs, scrims).
+- **Tournois MK ARENA** : Gestion des règles, formats (Search & Destroy, Hardpoint, etc.), recherche de tournois, inscriptions et classements d'équipes.
 
 ---
 
-## 📋 Ce qui reste à faire (Roadmap v2.5 → v5.0)
+## 🤖 2. Personnalité Dynamique & Moteur GLaDOS
 
-- [ ] **v2.5 — Agent & Outils Étendus** :
-  - Support de connecteurs d'outils externes (webhooks, API REST, notifications Discord riches).
-  - Planification de tâches asynchrones en arrière-plan.
-- [ ] **v3.0 — Modèle Local (Local LLM Engine)** :
-  - Intégration d'un connecteur pour modèle de langage local (Ollama / llama.cpp) sans dépendance obligatoire à une API cloud payante.
-- [ ] **v3.5 — Auto-évaluation continue** :
-  - Métriques d'usage des commandes, détection automatique de questions sans réponse pour enrichir la base de connaissances.
-- [ ] **v4.0 — Missions Autonomes Complexes** :
-  - Capacité à concevoir une fonctionnalité complète en 15+ étapes avec validation humaine intermédiaire par bouton Discord.
-- [ ] **v4.5 — Dashboard Web & Code Studio** :
-  - Interface web de monitoring, éditeur de code interactif et vue en direct des tests et propositions d'amélioration.
-- [ ] **v5.0 — NOVA Personal AI Ultime** :
-  - Fusion totale du moteur de raisonnement local, mémoire vectorielle long terme, personnalité multi-états et indépendance réseau complète.
+- **Mode Sarcasme & Évaluation** : Remarques acides et esprit acéré inspirés de GLaDOS lorsque sollicité ou provoqué.
+- **Système de Rancune & Pardon** : Mémorisation des provocations utilisateur et retour au calme lors d'excuses explicites.
+- **Changement de ton dynamique** : Détection du contexte et adaptation du niveau de formalisme selon les canaux (staff vs général).
 
 ---
 
-## 🛠️ Installation & Démarrage
+## 🧑‍💻 3. Coding Agent & Boucle d'Auto-Amélioration
 
+- **Analyse AST du code** : Cartographie continue de l'arbre syntaxique du projet (`coding/analyzer.py`).
+- **Validation stricte des modifications** : Verrouillage des fichiers critiques (`.env`, `firebase.json`, `credentials.json`, `security/`) via `coding/validator.py`.
+- **Sandbox & Rollback** : Toute proposition est exécutée dans un bac à sable temporaire avec tests `pytest` obligatoires avant commit.
+- **Gestion Git automatisée** : Création de branches isolées (`nova/*`), calcul de diffs et registre des propositions (`proposals/`).
+
+---
+
+## 🌐 4. Dashboard Web v2 (Firebase Hosting & FastAPI)
+
+- **Localisation** : `dashboard/public/index.html` (prêt pour `firebase deploy --only hosting`).
+- **Backend API** : `backend/main.py` (FastAPI).
+- **Zéro fausse donnée** : Affichage strict des métriques réelles du système, du dépôt Git et de la mémoire SQLite.
+- **15 Centres de Contrôle** :
+  1. Vue d'ensemble du Noyau IA & Métriques
+  2. Chat unifié NOVA synchronisé avec Firebase Realtime Database
+  3. Gestionnaire de mémoire SQLite hiérarchisée (Contextuel, Candidat, Validé)
+  4. NOVA Lab (propositions d'apprentissage et validation humaine)
+  5. Suivi des missions en direct
+  6. Code Studio (explorateur de fichiers réels et visionneuse de code)
+  7. Centre de tests avec exécution en direct de `pytest` (39 tests unitaires)
+  8. Historique Git et gestion des branches
+  9. Sécurité & Fichiers protégés
+  10. Outils & Permissions
+  11. Analytics & Télémétrie
+  12. Modération & Auto-mod Discord
+  13. Économie, Niveaux & Inventaire
+  14. Tournois & Stats CODM
+  15. Paramètres & Synchronisation Firebase
+
+---
+
+## 🧪 Tests & Qualité
+
+La suite de tests automatisés comprend **39 tests unitaires** couvrant l'intégralité de l'architecture :
 ```bash
-# 1. Cloner le dépôt
-git clone https://github.com/archange22/MK-arena-.git
-cd MK-arena-
-
-# 2. Configurer l'environnement virtuel
-python -m venv .venv
-source .venv/bin/activate
-
-# 3. Installer les dépendances
-pip install -r requirements.txt
-
-# 4. Configurer les variables d'environnement
-cp .env.example .env
-
-# 5. Lancer les tests unitaires
-pytest -v
-
-# 6. Démarrer NOVA
-python main.py
+python -m pytest -v tests/
 ```
 
----
-
-## ⚡ Architecture Avancée v2.1 → v5.0 (Core & Multi-Interface)
-
-Le projet a été restructuré selon la spécification modulaire complète :
-
-```
-nova/
-├── core/               # Cerveau central (nova.py, lifecycle.py, config.py)
-├── ai/                 # Moteur IA abstrait & local (local_engine.py, structured_output.py)
-├── memory/             # Mémoire sémantique, utilisateur, serveur & décomposition (semantic.py, retrieval.py, forgetting.py)
-├── personality/        # Moteur d'humeurs dynamiques, style & filtre d'insultes/excuses (mood.py, behavior.py, insults.py)
-├── discord_bot/        # Support @NOVA, replies, mentions et embeds riches (replies.py, mentions.py, embeds.py)
-├── tools/              # ToolManager sécurisé (filesystem, git, python, pytest, web, discord)
-├── coding/             # Analyseur AST, éditeur, patcher & reviewer automatique de code (patcher.py, reviewer.py)
-├── agent/              # Planificateur multi-étapes, exécuteur, supervisor & retry policies (task.py, executor.py)
-├── self_improvement/   # Expérimentations A/B, métriques & propositions (experiments.py, evaluator.py)
-├── git_manager/        # Isolation des tâches par branches Git, commits & rollback (repository.py, branches.py, rollback.py)
-├── security/           # Politiques sandbox, détection de secrets & audit log (secrets.py, audit.py, sandbox_policy.py)
-├── dashboard/          # API REST & WebSocket prêts pour le frontend Web / Firebase (dashboard/api/, dashboard/websocket/)
-└── tests/              # 36 tests unitaires automatisés avec pytest (100% passés)
-```
-
-### 🌐 Dashboard API & WebSocket
-Le backend expose désormais les points d'accès suivants pour le Dashboard et le Code Studio :
-- `GET /api/status` : Statut en direct de NOVA, CPU, mémoire, uptime, modèle actif.
-- `GET /api/metrics` : Taux de succès des tests, tâches complétées, latence moyenne.
-- `GET /api/tasks` : Liste des missions en cours et complétées.
-- `GET /api/logs` : Journal d'audit et logs temps réel.
-- `WS /ws` : Broadcaster d'événements pour l'interface temps réel.
+Tous les tests sont validés (100% passants).
