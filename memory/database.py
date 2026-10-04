@@ -6,15 +6,22 @@ class Database:
     def __init__(self, path):
         self.path = path
         self.lock = RLock()
+        self._shared_conn = None
+        if path == ":memory:":
+            self._shared_conn = sqlite3.connect(":memory:", check_same_thread=False)
+            self._shared_conn.row_factory = sqlite3.Row
 
     def connect(self):
+        if self._shared_conn is not None:
+            return self._shared_conn
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
         return conn
 
     def initialize(self):
-        with self.lock, self.connect() as c:
-            c.executescript(
+        with self.lock:
+            conn = self.connect()
+            conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS conversations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,15 +68,19 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_tournaments_name ON tournaments(name);
                 """
             )
+            conn.commit()
 
     def execute(self, sql, params=()):
-        with self.lock, self.connect() as c:
-            cur = c.execute(sql, params)
+        with self.lock:
+            conn = self.connect()
+            cur = conn.execute(sql, params)
+            conn.commit()
             return cur.lastrowid
 
     def query(self, sql, params=()):
-        with self.lock, self.connect() as c:
-            return c.execute(sql, params).fetchall()
+        with self.lock:
+            conn = self.connect()
+            return conn.execute(sql, params).fetchall()
 
     def count_tournaments(self):
         row = self.query("SELECT COUNT(*) AS n FROM tournaments")[0]

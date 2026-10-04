@@ -46,7 +46,9 @@ class KnowledgeManager:
     def _extract_tournament_fields(self, text):
         details = {}
 
-        teams_match = re.search(r"(?:equipes|équipe[s]?|teams?)\s*(?:actuellement\s*)?(?:sont|est|=|:)\s*(\d+)", text, re.IGNORECASE)
+        teams_match = re.search(r"(?:(\d+)\s*(?:équipes?|equipes?|teams?)|(?:équipes?|equipes?|teams?)\s*(?:actuellement\s*)?(?:sont|est|=|:|compte)?\s*(\d+))", text, re.IGNORECASE)
+        if teams_match:
+            details["teams"] = teams_match.group(1) or teams_match.group(2)
         if teams_match:
             details["teams"] = teams_match.group(1)
 

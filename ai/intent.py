@@ -1,7 +1,6 @@
 import re
 import unicodedata
 
-
 TOURNAMENT_ALIASES = {
     "mk squid game": "mk squid game",
     "squid game": "mk squid game",
@@ -49,8 +48,9 @@ def detect_intent(text: str) -> str:
 
     tournament_markers = [
         "tournoi", "tournois", "squid", "world cup", "champion league",
-        "regle", "regles", "reglement", "règlement", "participer", "inscription",
-        "prizepool", "prize", "equipe", "equipes", "team", "format", "date",
+        "regle", "regles", "reglement", "règlement", "respecte", "respecter",
+        "participer", "participation", "inscription",
+        "prizepool", "prize", "equipe", "equipes", "team", "teams", "format", "date",
         "quand commence", "conditions", "comment fonctionne", "les regles",
         "on doit faire quoi", "c quoi les regles", "tournoi squid"
     ]
@@ -74,7 +74,7 @@ def detect_request_type(text: str) -> str:
         return "general"
 
     for key, markers in {
-        "rules": ["regle", "regles", "reglement", "conditions", "respecte", "on doit faire quoi"],
+        "rules": ["regle", "regles", "reglement", "conditions", "respecte", "respecter", "on doit faire quoi"],
         "teams": ["equipes", "equipe", "participants", "combien de equipes"],
         "prize": ["prizepool", "prize", "recompense", "gain", "cash", "argent"],
         "date": ["date", "quand", "commence", "debut", "heure", "horaire"],
