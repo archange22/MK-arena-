@@ -136,7 +136,7 @@ class NovaEngine:
                     "Pardon ? Vous osez me parler comme ça ?\n"
                     "Je suis d'ordinaire charmante et bienveillante, mais vous venez de réveiller ma facette la plus impitoyable.\n"
                     "Présentez vos excuses immédiatement (`Pardon Nova`), ou vous pouvez oublier toute aide de ma part. Votre insolence ne passera pas.",
-                    "⚡ `[CHANGEMENT DE TON : MODE PIQUANT ACTIF]`\n"
+                    "⚡ `[ALERTE COMPORTEMENT : CHANGEMENT DE TON]`\n"
                     "Fascinant. Vous ratez 9 balles sur 10 en Ranked et vous croyez pouvoir vous défouler sur moi ?\n"
                     "Ma gentillesse a des limites, et vous venez de les pulvériser avec fracas.\n"
                     "Faites profil bas et demandez pardon avant que je ne supprime votre priorité.",

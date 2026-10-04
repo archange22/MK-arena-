@@ -115,3 +115,34 @@ pytest -v
 # 6. Démarrer NOVA
 python main.py
 ```
+
+---
+
+## ⚡ Architecture Avancée v2.1 → v5.0 (Core & Multi-Interface)
+
+Le projet a été restructuré selon la spécification modulaire complète :
+
+```
+nova/
+├── core/               # Cerveau central (nova.py, lifecycle.py, config.py)
+├── ai/                 # Moteur IA abstrait & local (local_engine.py, structured_output.py)
+├── memory/             # Mémoire sémantique, utilisateur, serveur & décomposition (semantic.py, retrieval.py, forgetting.py)
+├── personality/        # Moteur d'humeurs dynamiques, style & filtre d'insultes/excuses (mood.py, behavior.py, insults.py)
+├── discord_bot/        # Support @NOVA, replies, mentions et embeds riches (replies.py, mentions.py, embeds.py)
+├── tools/              # ToolManager sécurisé (filesystem, git, python, pytest, web, discord)
+├── coding/             # Analyseur AST, éditeur, patcher & reviewer automatique de code (patcher.py, reviewer.py)
+├── agent/              # Planificateur multi-étapes, exécuteur, supervisor & retry policies (task.py, executor.py)
+├── self_improvement/   # Expérimentations A/B, métriques & propositions (experiments.py, evaluator.py)
+├── git_manager/        # Isolation des tâches par branches Git, commits & rollback (repository.py, branches.py, rollback.py)
+├── security/           # Politiques sandbox, détection de secrets & audit log (secrets.py, audit.py, sandbox_policy.py)
+├── dashboard/          # API REST & WebSocket prêts pour le frontend Web / Firebase (dashboard/api/, dashboard/websocket/)
+└── tests/              # 36 tests unitaires automatisés avec pytest (100% passés)
+```
+
+### 🌐 Dashboard API & WebSocket
+Le backend expose désormais les points d'accès suivants pour le Dashboard et le Code Studio :
+- `GET /api/status` : Statut en direct de NOVA, CPU, mémoire, uptime, modèle actif.
+- `GET /api/metrics` : Taux de succès des tests, tâches complétées, latence moyenne.
+- `GET /api/tasks` : Liste des missions en cours et complétées.
+- `GET /api/logs` : Journal d'audit et logs temps réel.
+- `WS /ws` : Broadcaster d'événements pour l'interface temps réel.
