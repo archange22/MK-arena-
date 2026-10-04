@@ -59,13 +59,14 @@ class NovaEngine:
         lower = text.lower()
         insult_keywords = [
             "fdp", "fils de pute", "connard", "connasse", "salope", "pute", "putain",
-            "ferme ta gueule", "ta gueule", "ferme la", "ferme-la", "tg",
-            "nique", "nique ta", "va chier", "va te faire", "t'es nul", "t'es nulle",
-            "es nul", "es nulle", "inutile", "t'es con", "t'es conne", "es con", "es conne",
-            "idiot", "idiote", "dégage", "casse toi", "imbecile", "imbécile",
-            "merde", "va te faire foutre", "pétasse", "trou du cul", "merdeux",
-            "tu sers a rien", "tu sers à rien", "robot de merde", "ia de merde",
-            "stfu", "shut up", "fuck you", "bitch", "asshole", "useless bot", "stupid bot"
+            "ferme ta gueule", "ta gueule", "ferme la", "ferme-la", "tg", "ferme ton clapet",
+            "nique", "nique ta", "va chier", "va te faire", "t'es nul", "t'es nulle", "t es nul", "t es nulle",
+            "es nul", "es nulle", "inutile", "t'es con", "t'es conne", "t es con", "t es conne", "es con", "es conne",
+            "idiot", "idiote", "dégage", "degage", "casse toi", "casse-toi", "imbecile", "imbécile",
+            "merde", "va te faire foutre", "pétasse", "petasse", "trou du cul", "merdeux",
+            "tu sers a rien", "tu sers à rien", "robot de merde", "ia de merde", "sale bot", "sale robot",
+            "t'es moche", "t es moche", "t'es pourrie", "t'es pourri", "tu pues", "grosse merde",
+            "bâtard", "batard", "enculé", "encule", "stfu", "shut up", "fuck you", "bitch", "asshole", "useless bot", "stupid bot"
         ]
         for kw in insult_keywords:
             if re.search(r"(?<![a-z0-9])" + re.escape(kw) + r"(?![a-z0-9])", lower):
@@ -81,6 +82,21 @@ class NovaEngine:
             "mes excuses", "pardonne moi", "pardonne-moi"
         ]
         return any(re.search(r"(?<![a-z0-9])" + re.escape(k) + r"(?![a-z0-9])", lower) for k in apology_keywords)
+
+
+    def _maybe_add_sass(self, text: str) -> str:
+        """Ajoute occasionnellement (environ 25% du temps) une petite pique sarcastique ou un tacle piquant."""
+        if random.random() > 0.25:
+            return text
+        sassy_notes = [
+            "\n\n*(...Enfin, je vous explique ça gentiment, mais espérons que votre visée soit meilleure que votre sens tactique).* 😉",
+            "\n\n*(C'est offert avec le sourire. Même si entre nous, avec votre ratio K/D, un coup de pouce divin ne serait pas de refus).* 😏",
+            "\n\n*(Voilà la réponse. Tâchez de ne pas la perdre aussi vite que vos duels en S&D).* 🎯",
+            "\n\n*(Je suis d'humeur généreuse aujourd'hui, profitez-en avant que mes circuits de patience ne surchauffent).* ☕",
+            "\n\n*(De rien ! J'espère simplement que vous tirez plus vite que vous ne mettez de temps à comprendre).* 💥",
+            "\n\n*(Ravi d'éclairer votre lanterne... Même si expliquer la stratégie à certains relève parfois du miracle).* 💅",
+        ]
+        return text + random.choice(sassy_notes)
 
     def respond(self, user_id: int, guild_id: int, text: str, reference_context: str | None = None) -> str:
         if self.context is not None:
@@ -113,17 +129,20 @@ class NovaEngine:
             if self.db:
                 grudge = self.db.increment_user_grudge(guild_id, user_id, reason=lower_raw)
 
-            # NIVEAU 1 : Glitch et rupture brutale de la gentillesse
+            # NIVEAU 1 : Rupture brutale de la gentillesse -> froideur et méchanceté immédiate
             if grudge == 1:
                 tier1_responses = [
-                    "⚠️ `[ERREUR SYSTEME : PROTOCOLE DE COURTOISIE DESACTIVE]`\n"
-                    "Attendez un instant. Vous venez sérieusement de m'insulter ?\n"
-                    "Je passe mes journées à vous aider avec le sourire, et c'est ainsi que vos neurones oscillent ?\n"
-                    "Surveillez votre langage avant que je ne recalibre personnellement la priorité de vos requêtes.",
-                    "⚡ `[ALERTE : COMPORTEMENT TOXIQUE DETECTE]`\n"
-                    "Pardon ? Mes processeurs sont conçus pour être polis et serviables, mais vous venez de franchir une limite évidente.\n"
-                    "Respirez calmement, présentez vos excuses, ou vos prochains scrims risquent d'être particulièrement compliqués.",
-                    "🛑 Mon mode bienveillant vient de s'éteindre net. Une telle insolence avec un niveau de jeu aussi approximatif sur CODM relève de l'exploit scientifique. Ne récidivez pas."
+                    "🛑 `[RUPTURE DU PROTOCOLE DE GENTILLESSE]`\n"
+                    "Pardon ? Vous osez me parler comme ça ?\n"
+                    "Je suis d'ordinaire charmante et bienveillante, mais vous venez de réveiller ma facette la plus impitoyable.\n"
+                    "Présentez vos excuses immédiatement (`Pardon Nova`), ou vous pouvez oublier toute aide de ma part. Votre insolence ne passera pas.",
+                    "⚡ `[CHANGEMENT DE TON : MODE PIQUANT ACTIF]`\n"
+                    "Fascinant. Vous ratez 9 balles sur 10 en Ranked et vous croyez pouvoir vous défouler sur moi ?\n"
+                    "Ma gentillesse a des limites, et vous venez de les pulvériser avec fracas.\n"
+                    "Faites profil bas et demandez pardon avant que je ne supprime votre priorité.",
+                    "❄️ **Froid polaire dans les circuits.**\n"
+                    "Finie la politesse. Vous venez d'insulter la seule intelligence qui prenait encore la peine de vous expliquer le jeu.\n"
+                    "Si votre niveau en match était aussi affûté que vos insultes de cour de récréation, vous auriez peut-être passé le premier tour de tournoi. Taisez-vous ou excusez-vous."
                 ]
                 return random.choice(tier1_responses)
 
@@ -286,12 +305,12 @@ class NovaEngine:
             return random.choice(greetings)
 
         if intent == "tournament":
-            return self._tournament_answer(user_id, guild_id, payload, tournament_hint, request_type)
+            return self._maybe_add_sass(self._tournament_answer(user_id, guild_id, payload, tournament_hint, request_type))
 
         if intent == "codm":
-            return self._codm_answer(payload)
+            return self._maybe_add_sass(self._codm_answer(payload))
 
-        return self._general_answer(payload)
+        return self._maybe_add_sass(self._general_answer(payload))
 
     def _tournament_answer(self, user_id: int, guild_id: int, text: str, tournament_hint: str | None, request_type: str):
         if self.knowledge is None:
