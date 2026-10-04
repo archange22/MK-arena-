@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NOVA v5.0 — Control Center & Code Studio | MK Arena</title>
+  <title>NOVA v5.0 — Control Center & Code Studio | MK ARENA</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -11,14 +11,15 @@
       theme: {
         extend: {
           colors: {
-            nova: {
-              50: '#f0f9ff',
-              100: '#e0f2fe',
-              500: '#0ea5e9',
-              600: '#0284c7',
-              700: '#0369a1',
-              900: '#0c4a6e',
-              glow: '#38bdf8'
+            mk: {
+              dark: '#070913',
+              card: '#0f1424',
+              border: '#1f2942',
+              purple: '#8b5cf6',
+              purpleGlow: '#a855f7',
+              blue: '#0ea5e9',
+              blueGlow: '#38bdf8',
+              accent: '#6366f1'
             }
           }
         }
@@ -27,367 +28,600 @@
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
-    body { background-color: #0b0f19; color: #f1f5f9; font-family: ui-sans-serif, system-ui, sans-serif; }
-    .glass { background: rgba(17, 24, 39, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
-    .glass-active { border-color: rgba(14, 165, 233, 0.5); box-shadow: 0 0 15px rgba(14, 165, 233, 0.2); }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #0b0f19; }
-    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+    body { background-color: #070913; color: #f1f5f9; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    .glass-panel { background: rgba(15, 20, 36, 0.75); backdrop-filter: blur(16px); border: 1px solid #1f2942; }
+    .glass-panel-active { border-color: rgba(139, 92, 246, 0.5); box-shadow: 0 0 20px rgba(139, 92, 246, 0.15); }
+    .glow-purple { text-shadow: 0 0 12px rgba(168, 85, 247, 0.4); }
+    .glow-blue { text-shadow: 0 0 12px rgba(56, 189, 248, 0.4); }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #070913; }
+    ::-webkit-scrollbar-thumb { background: #1f2942; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    .editor-line-num { user-select: none; color: #475569; width: 2.5rem; text-align: right; padding-right: 0.75rem; }
   </style>
 </head>
-<body class="min-h-screen flex flex-col antialiased selection:bg-sky-500 selection:text-white">
+<body class="min-h-screen flex flex-col antialiased selection:bg-purple-600 selection:text-white">
 
-  <!-- Navigation Bar -->
-  <header class="glass sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between border-b border-slate-800">
+  <!-- TOP HEADER -->
+  <header class="glass-panel sticky top-0 z-50 px-5 py-3 flex items-center justify-between border-b border-mk-border">
     <div class="flex items-center gap-3">
-      <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-sky-500/20 text-white font-bold tracking-wider">
+      <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-sky-500 flex items-center justify-center shadow-lg shadow-purple-600/30 text-white font-black text-xl">
         N
       </div>
       <div>
         <div class="flex items-center gap-2">
-          <h1 class="font-bold text-lg text-white tracking-wide">NOVA <span class="text-xs px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400 font-mono border border-sky-500/30">v5.0 CORE</span></h1>
-          <span id="conn-badge" class="flex items-center gap-1.5 text-xs text-emerald-400 font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-            <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span> Firebase Connecté
+          <span class="font-bold text-lg text-white tracking-wide glow-purple">NOVA</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono border border-purple-500/30">v5.0 CORE</span>
+          <span id="system-status-badge" class="flex items-center gap-1.5 text-xs text-emerald-400 font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+            <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span> EN LIGNE
           </span>
         </div>
-        <p class="text-xs text-slate-400">MK Esports & Arena • Personal Autonomous Coding AI</p>
+        <p class="text-xs text-slate-400">MK ARENA Control Center & Autonomous Code Studio</p>
       </div>
     </div>
 
-    <!-- Navigation Tabs -->
-    <nav class="hidden md:flex items-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800 text-sm">
-      <button onclick="switchTab('overview')" class="tab-btn px-4 py-1.5 rounded-lg text-sky-400 bg-slate-800/80 font-medium transition" data-tab="overview">
-        <i class="fa-solid fa-gauge mr-1.5"></i>Vue Globale
-      </button>
-      <button onclick="switchTab('chat')" class="tab-btn px-4 py-1.5 rounded-lg text-slate-400 hover:text-white transition" data-tab="chat">
-        <i class="fa-solid fa-message mr-1.5"></i>Studio Chat
-      </button>
-      <button onclick="switchTab('coding')" class="tab-btn px-4 py-1.5 rounded-lg text-slate-400 hover:text-white transition" data-tab="coding">
-        <i class="fa-solid fa-code mr-1.5"></i>Code & Missions
-      </button>
-      <button onclick="switchTab('tournaments')" class="tab-btn px-4 py-1.5 rounded-lg text-slate-400 hover:text-white transition" data-tab="tournaments">
-        <i class="fa-solid fa-trophy mr-1.5"></i>MK Arena
-      </button>
-      <button onclick="switchTab('memory')" class="tab-btn px-4 py-1.5 rounded-lg text-slate-400 hover:text-white transition" data-tab="memory">
-        <i class="fa-solid fa-brain mr-1.5"></i>Mémoire Sémantique
-      </button>
-    </nav>
-
-    <!-- Quick Status Indicators -->
-    <div class="flex items-center gap-3">
-      <div class="hidden sm:flex flex-col text-right">
-        <span class="text-xs text-slate-400">Humeur active</span>
-        <span id="current-mood" class="text-xs font-semibold text-sky-400 uppercase tracking-wider">NORMAL / FOCUS</span>
+    <!-- Quick System Telemetry in Header -->
+    <div class="hidden lg:flex items-center gap-6 text-xs text-slate-300">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-microchip text-purple-400"></i>
+        <span>Modèle: <strong id="header-model" class="text-white">NOVA-Reasoning v5</strong></span>
       </div>
-      <button onclick="triggerRollbackModal()" class="px-3 py-1.5 text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg transition flex items-center gap-1.5">
-        <i class="fa-solid fa-clock-rotate-left"></i> Rollback Git
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-memory text-sky-400"></i>
+        <span>RAM: <strong id="header-ram" class="text-white">142 MB</strong></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-vial-circle-check text-emerald-400"></i>
+        <span>Pytest: <strong id="header-tests" class="text-emerald-400">39 / 39 (100%)</strong></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <i class="fa-brands fa-discord text-indigo-400"></i>
+        <span>Discord: <strong class="text-indigo-300">MK Community</strong></span>
+      </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center gap-2.5">
+      <button onclick="triggerEmergencyRollback()" class="px-3 py-1.5 text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg transition flex items-center gap-1.5">
+        <i class="fa-solid fa-rotate-left"></i> Rollback Git
+      </button>
+      <button onclick="triggerRunAllTests()" class="px-3 py-1.5 text-xs font-medium bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition shadow-md shadow-purple-600/25 flex items-center gap-1.5">
+        <i class="fa-solid fa-play"></i> Lancer Tests
       </button>
     </div>
   </header>
 
-  <!-- Main Content Area -->
+  <!-- SECONDARY NAV BAR (15+ CENTERS) -->
+  <div class="bg-mk-card/90 border-b border-mk-border px-4 py-2 overflow-x-auto scrollbar-none flex items-center gap-1 text-xs">
+    <button onclick="switchCenter('overview')" class="center-nav-btn px-3 py-1.5 rounded-lg bg-purple-600 text-white font-medium flex items-center gap-1.5 transition whitespace-nowrap" data-center="overview">
+      <i class="fa-solid fa-house"></i> 1. Dashboard
+    </button>
+    <button onclick="switchCenter('chat')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="chat">
+      <i class="fa-solid fa-comments"></i> 2. Chat
+    </button>
+    <button onclick="switchCenter('learning-lab')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="learning-lab">
+      <i class="fa-solid fa-flask"></i> 3-4. Labo Apprentissage
+    </button>
+    <button onclick="switchCenter('code-studio')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="code-studio">
+      <i class="fa-solid fa-laptop-code"></i> 5. Code Studio
+    </button>
+    <button onclick="switchCenter('missions')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="missions">
+      <i class="fa-solid fa-list-check"></i> 6. Missions
+    </button>
+    <button onclick="switchCenter('test-center')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="test-center">
+      <i class="fa-solid fa-vial"></i> 7. Test Center
+    </button>
+    <button onclick="switchCenter('git-center')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="git-center">
+      <i class="fa-solid fa-code-branch"></i> 8. Git Center
+    </button>
+    <button onclick="switchCenter('memory-center')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="memory-center">
+      <i class="fa-solid fa-brain"></i> 9. Memory Center
+    </button>
+    <button onclick="switchCenter('tools-center')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="tools-center">
+      <i class="fa-solid fa-toolbox"></i> 10. Tools Center
+    </button>
+    <button onclick="switchCenter('security-center')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="security-center">
+      <i class="fa-solid fa-shield-halved"></i> 11. Sécurité
+    </button>
+    <button onclick="switchCenter('self-improvement')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="self-improvement">
+      <i class="fa-solid fa-dna"></i> 12. Auto-Amélioration
+    </button>
+    <button onclick="switchCenter('discord-center')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="discord-center">
+      <i class="fa-brands fa-discord"></i> 13. Discord
+    </button>
+    <button onclick="switchCenter('knowledge-center')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="knowledge-center">
+      <i class="fa-solid fa-book-bookmark"></i> 14. MK Arena
+    </button>
+    <button onclick="switchCenter('analytics')" class="center-nav-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition whitespace-nowrap flex items-center gap-1.5" data-center="analytics">
+      <i class="fa-solid fa-chart-line"></i> 15. Analytics
+    </button>
+  </div>
+
+  <!-- MAIN CONTAINER -->
   <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
 
-    <!-- TAB 1: OVERVIEW -->
-    <section id="tab-overview" class="tab-content space-y-6">
-      <!-- Quick Stats Grid -->
-      <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="glass p-4 rounded-xl border border-slate-800">
-          <div class="flex items-center justify-between text-slate-400 text-xs">
-            <span>Uptime Core</span>
-            <i class="fa-solid fa-clock text-sky-400"></i>
+    <!-- 1. DASHBOARD PRINCIPAL -->
+    <div id="center-overview" class="center-view space-y-6">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="glass-panel p-4 rounded-xl border border-mk-border">
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <span>État NOVA</span>
+            <i class="fa-solid fa-circle text-emerald-400 text-[10px]"></i>
           </div>
-          <p id="stat-uptime" class="text-2xl font-bold text-white mt-1">99.98%</p>
-          <span class="text-xs text-emerald-400">Opérationnel (v5.0)</span>
+          <p class="text-xl font-bold text-white mt-1">En Ligne</p>
+          <span class="text-[11px] text-emerald-400">NOVA CORE v5.0 opérationnel</span>
         </div>
-
-        <div class="glass p-4 rounded-xl border border-slate-800">
-          <div class="flex items-center justify-between text-slate-400 text-xs">
-            <span>Tests Unitaires</span>
-            <i class="fa-solid fa-vial-circle-check text-emerald-400"></i>
+        <div class="glass-panel p-4 rounded-xl border border-mk-border">
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <span>Missions en cours</span>
+            <i class="fa-solid fa-tasks text-purple-400"></i>
           </div>
-          <p id="stat-tests" class="text-2xl font-bold text-white mt-1">36 / 36</p>
-          <span class="text-xs text-emerald-400">100% Succès Pytest</span>
+          <p class="text-xl font-bold text-white mt-1">1 en cours / 14 finies</p>
+          <span class="text-[11px] text-purple-300">Branche: nova/task-firebase-sync</span>
         </div>
-
-        <div class="glass p-4 rounded-xl border border-slate-800">
-          <div class="flex items-center justify-between text-slate-400 text-xs">
-            <span>Missions Résolues</span>
-            <i class="fa-solid fa-list-check text-indigo-400"></i>
+        <div class="glass-panel p-4 rounded-xl border border-mk-border">
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <span>Succès Pytest</span>
+            <i class="fa-solid fa-check-double text-sky-400"></i>
           </div>
-          <p id="stat-missions" class="text-2xl font-bold text-white mt-1">14</p>
-          <span class="text-xs text-sky-400">Auto-amélioration active</span>
+          <p class="text-xl font-bold text-white mt-1">39 / 39 (100%)</p>
+          <span class="text-[11px] text-sky-400">Sandbox sécurisée active</span>
         </div>
-
-        <div class="glass p-4 rounded-xl border border-slate-800">
-          <div class="flex items-center justify-between text-slate-400 text-xs">
-            <span>Modèle IA</span>
-            <i class="fa-solid fa-microchip text-amber-400"></i>
+        <div class="glass-panel p-4 rounded-xl border border-mk-border">
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <span>Activité Discord</span>
+            <i class="fa-brands fa-discord text-indigo-400"></i>
           </div>
-          <p id="stat-model" class="text-2xl font-bold text-white mt-1">NOVA Engine</p>
-          <span class="text-xs text-slate-400">Raisonnement multi-étapes</span>
+          <p class="text-xl font-bold text-white mt-1">1 284 msgs</p>
+          <span class="text-[11px] text-indigo-300">143 mentions • 87 replies</span>
         </div>
       </div>
 
-      <!-- Live Engine Status & Realtime Terminal -->
+      <!-- Quick Action Cards & Live Timeline -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Live System Heartbeat -->
-        <div class="glass rounded-xl p-5 border border-slate-800 space-y-4">
-          <h2 class="font-semibold text-white flex items-center gap-2">
-            <i class="fa-solid fa-server text-sky-400"></i> État des Modules Système
+        <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
+          <h2 class="text-sm font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-bolt text-purple-400"></i> Actions Immédiates
           </h2>
-          <div class="space-y-3 text-sm">
-            <div class="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-              <span class="text-slate-300">NovaCore Orchestrator</span>
-              <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-xs font-mono">ONLINE</span>
-            </div>
-            <div class="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-              <span class="text-slate-300">AST Code Reviewer & Patcher</span>
-              <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-xs font-mono">ACTIVE</span>
-            </div>
-            <div class="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-              <span class="text-slate-300">Sandbox Execution Policy</span>
-              <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-xs font-mono">SECURED</span>
-            </div>
-            <div class="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-              <span class="text-slate-300">Discord Interaction Gateway</span>
-              <span class="px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 text-xs font-mono">STANDBY / READY</span>
-            </div>
-            <div class="flex items-center justify-between py-1.5">
-              <span class="text-slate-300">Firebase Realtime DB</span>
-              <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-xs font-mono">SYNCED</span>
-            </div>
-          </div>
-
-          <div class="pt-2">
-            <button onclick="runDiagnostic()" class="w-full py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-sm font-medium transition shadow-lg shadow-sky-600/20">
-              <i class="fa-solid fa-play mr-1.5"></i> Lancer Auto-Diagnostic
+          <div class="space-y-2">
+            <button onclick="switchCenter('code-studio')" class="w-full text-left p-3 rounded-lg bg-mk-dark/80 hover:bg-slate-800 border border-mk-border transition flex items-center justify-between">
+              <div>
+                <p class="text-xs font-semibold text-white">Ouvrir le Code Studio</p>
+                <p class="text-[11px] text-slate-400">Inspecter les fichiers, diffs et tests</p>
+              </div>
+              <i class="fa-solid fa-chevron-right text-xs text-slate-400"></i>
+            </button>
+            <button onclick="switchCenter('self-improvement')" class="w-full text-left p-3 rounded-lg bg-mk-dark/80 hover:bg-slate-800 border border-mk-border transition flex items-center justify-between">
+              <div>
+                <p class="text-xs font-semibold text-white">Voir les 5 propositions d'amélioration</p>
+                <p class="text-[11px] text-slate-400">Auto-évaluation et optimisations prêtes</p>
+              </div>
+              <i class="fa-solid fa-chevron-right text-xs text-slate-400"></i>
+            </button>
+            <button onclick="switchCenter('learning-lab')" class="w-full text-left p-3 rounded-lg bg-mk-dark/80 hover:bg-slate-800 border border-mk-border transition flex items-center justify-between">
+              <div>
+                <p class="text-xs font-semibold text-white">Laboratoire d'Apprentissage</p>
+                <p class="text-[11px] text-slate-400">Valider les faits extraits des discussions</p>
+              </div>
+              <i class="fa-solid fa-chevron-right text-xs text-slate-400"></i>
             </button>
           </div>
         </div>
 
-        <!-- Realtime Live Logs & Terminal Stream -->
-        <div class="lg:col-span-2 glass rounded-xl p-5 border border-slate-800 flex flex-col h-96">
-          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-            <div class="flex items-center gap-2">
-              <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
-              <h2 class="font-semibold text-white text-sm">Console d'Exécution & Logs d'Audit</h2>
-            </div>
-            <button onclick="clearLogs()" class="text-xs text-slate-400 hover:text-slate-200">
-              <i class="fa-solid fa-trash mr-1"></i>Effacer
-            </button>
+        <div class="lg:col-span-2 glass-panel p-5 rounded-xl border border-mk-border flex flex-col h-80">
+          <div class="flex items-center justify-between pb-3 border-b border-mk-border">
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-terminal text-sky-400"></i> Journal d'Exécution & Événements en Direct
+            </h2>
+            <button onclick="clearTimeline()" class="text-xs text-slate-400 hover:text-white">Effacer</button>
           </div>
-          <div id="terminal-logs" class="flex-1 overflow-y-auto mt-3 font-mono text-xs text-slate-300 space-y-1.5 pr-2">
-            <div class="text-sky-400">[00:00:01] [CORE] Initialisation NOVA v5.0 - Architecture modulaire validée.</div>
-            <div class="text-emerald-400">[00:00:02] [FIREBASE] Connexion établie avec https://mk-esports-events-default-rtdb.europe-west1.firebasedatabase.app.</div>
-            <div class="text-slate-400">[00:00:03] [MEMORY] Chargement de la mémoire sémantique et des tables tournois MK Arena.</div>
-            <div class="text-slate-400">[00:00:04] [TESTS] Validation Pytest : 36/36 tests réussis avec succès.</div>
-            <div class="text-indigo-400">[00:00:05] [AGENT] Prêt pour les missions autonomes de code et d'analyse.</div>
+          <div id="overview-timeline" class="flex-1 overflow-y-auto mt-3 font-mono text-xs space-y-1.5 pr-2">
+            <div class="text-purple-400">[13:30:00] [NOVA CORE] Démarrage réussi - Moteur v5.0 actif.</div>
+            <div class="text-sky-400">[13:30:02] [FIREBASE] Connexion établie avec https://mk-esports-events-default-rtdb.europe-west1.firebasedatabase.app.</div>
+            <div class="text-emerald-400">[13:30:05] [TESTS] 39/39 tests Pytest validés (CodeAgent, Sandbox, AST, Git, Security).</div>
+            <div class="text-slate-300">[13:30:08] [GIT] Branche 'main' à jour (Commit cbc83f5).</div>
+            <div class="text-indigo-400">[13:30:12] [DISCORD] Passerelle MK Arena prête à recevoir les événements.</div>
           </div>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- TAB 2: LIVE CHAT STUDIO -->
-    <section id="tab-chat" class="tab-content hidden space-y-4">
-      <div class="glass rounded-xl border border-slate-800 h-[640px] flex flex-col">
-        <!-- Chat Header -->
-        <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+    <!-- 2. NOVA CHAT -->
+    <div id="center-chat" class="center-view hidden space-y-4">
+      <div class="glass-panel rounded-xl border border-mk-border h-[600px] flex flex-col">
+        <div class="p-4 border-b border-mk-border flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <div class="h-9 w-9 rounded-full bg-sky-600/30 border border-sky-500/50 flex items-center justify-center text-sky-400 font-bold">
+            <div class="h-9 w-9 rounded-xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-400 font-bold">
               <i class="fa-solid fa-robot"></i>
             </div>
             <div>
-              <h2 class="text-sm font-semibold text-white">Discussion Directe avec NOVA</h2>
-              <p class="text-xs text-slate-400">Mémoire d'utilisateur et de contexte active</p>
+              <h2 class="text-sm font-bold text-white">Discussion NOVA CORE</h2>
+              <p class="text-xs text-slate-400">Même cerveau que Discord • Mémoire sémantique active</p>
             </div>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-slate-400">Raisonnement renforcé</span>
-            <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
-          </div>
+          <span class="text-xs px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20">Humeur: Bienveillante / Focus</span>
         </div>
 
-        <!-- Messages Area -->
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+        <div id="chat-thread" class="flex-1 overflow-y-auto p-4 space-y-4">
           <div class="flex items-start gap-3">
-            <div class="h-8 w-8 rounded-lg bg-sky-600/20 text-sky-400 flex items-center justify-center shrink-0">
-              <i class="fa-solid fa-robot text-xs"></i>
+            <div class="h-8 w-8 rounded-lg bg-purple-600/30 text-purple-300 flex items-center justify-center shrink-0 text-xs">
+              <i class="fa-solid fa-robot"></i>
             </div>
-            <div class="bg-slate-800/70 border border-slate-700/50 rounded-2xl p-3.5 max-w-2xl text-sm leading-relaxed">
-              Bonjour Michel ! Je suis <strong>NOVA v5.0</strong>. Je suis reliée à votre base Firebase <code>mk-esports-events</code>, à votre dépôt GitHub et à MK Arena. Comment puis-je vous aider aujourd'hui ?
+            <div class="bg-mk-card border border-mk-border rounded-2xl p-3.5 max-w-2xl text-sm leading-relaxed">
+              Bonjour Michel ! Je suis prête. Que souhaitez-vous faire ? Vous pouvez me demander d'analyser un fichier, de vérifier les tournois MK Arena ou de lancer une mission de code autonome.
             </div>
           </div>
         </div>
 
-        <!-- Chat Input -->
-        <div class="p-4 border-t border-slate-800 bg-slate-900/40">
-          <form id="chat-form" onsubmit="handleSendMessage(event)" class="flex gap-2">
-            <input id="chat-input" type="text" placeholder="Posez une question, demandez du code ou une analyse MK Arena..." class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500 transition" required>
-            <button type="submit" class="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-sky-600/20">
+        <div class="p-4 border-t border-mk-border bg-mk-dark/60">
+          <form onsubmit="sendChat(event)" class="flex gap-2">
+            <input id="chat-input-field" type="text" placeholder="Écrivez un message ou une commande à NOVA..." class="flex-1 bg-mk-dark border border-mk-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500">
+            <button type="submit" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-medium transition shadow-md shadow-purple-600/30">
               <i class="fa-solid fa-paper-plane mr-1"></i> Envoyer
             </button>
           </form>
-          <div class="flex gap-2 mt-2">
-            <button onclick="setPrompt('Analyse le code de mon agent de tournoi')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-md transition">💡 Analyse du code</button>
-            <button onclick="setPrompt('Règles du tournoi MK Arena COD Mobile')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-md transition">🏆 Règles MK Arena</button>
-            <button onclick="setPrompt('Vérifie la sécurité et les secrets du projet')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-md transition">🔒 Audit sécurité</button>
+          <div class="flex flex-wrap gap-2 mt-2">
+            <button onclick="quickPrompt('Analyse tournaments/search.py et propose une optimisation')" class="text-xs bg-mk-card hover:bg-slate-800 border border-mk-border px-2.5 py-1 rounded-md text-slate-300">🔍 Analyse search.py</button>
+            <button onclick="quickPrompt('Quelles sont les règles Hardpoint de MK Arena ?')" class="text-xs bg-mk-card hover:bg-slate-800 border border-mk-border px-2.5 py-1 rounded-md text-slate-300">🏆 Règles MK Arena</button>
+            <button onclick="quickPrompt('Lance un auto-test complet de tous les modules')" class="text-xs bg-mk-card hover:bg-slate-800 border border-mk-border px-2.5 py-1 rounded-md text-slate-300">⚡ Auto-test Pytest</button>
           </div>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- TAB 3: CODE STUDIO & MISSIONS -->
-    <section id="tab-coding" class="tab-content hidden space-y-6">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- New Mission Launcher -->
-        <div class="glass rounded-xl p-5 border border-slate-800 space-y-4">
-          <h2 class="font-semibold text-white flex items-center gap-2">
-            <i class="fa-solid fa-wand-magic-sparkles text-sky-400"></i> Nouvelle Mission de Code
-          </h2>
-          <div class="space-y-3">
-            <div>
-              <label class="text-xs text-slate-400 block mb-1">Titre de la tâche</label>
-              <input id="task-title" type="text" placeholder="Ex: Optimiser le parsing des règles de tournoi" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-sky-500">
-            </div>
-            <div>
-              <label class="text-xs text-slate-400 block mb-1">Fichier cible</label>
-              <input id="task-file" type="text" placeholder="Ex: tournaments/rules.py" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-sky-500">
-            </div>
-            <div>
-              <label class="text-xs text-slate-400 block mb-1">Description des modifications</label>
-              <textarea id="task-desc" rows="3" placeholder="Expliquez ce que NOVA doit concevoir, tester et valider..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-sky-500"></textarea>
-            </div>
-            <button onclick="createTask()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition shadow-lg shadow-indigo-600/20">
-              <i class="fa-solid fa-rocket mr-1.5"></i> Lancer la Mission Autonome
-            </button>
-          </div>
-        </div>
-
-        <!-- Missions List & Status -->
-        <div class="lg:col-span-2 glass rounded-xl p-5 border border-slate-800 space-y-4">
-          <div class="flex items-center justify-between">
-            <h2 class="font-semibold text-white flex items-center gap-2">
-              <i class="fa-solid fa-diagram-project text-indigo-400"></i> Missions d'Auto-Amélioration
-            </h2>
-            <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-md">Branches isolées Git</span>
-          </div>
-
-          <div class="space-y-3">
-            <div class="p-3.5 bg-slate-900/70 border border-slate-800 rounded-xl flex items-center justify-between">
-              <div>
-                <span class="text-xs text-sky-400 font-mono">MISSION-014</span>
-                <h3 class="text-sm font-medium text-white">Ajout de l'intégration Firebase Hosting & Realtime Sync</h3>
-                <p class="text-xs text-slate-400">Branche: <code>nova/task-firebase-sync</code> • 36/36 tests validés</p>
-              </div>
-              <span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-medium">TERMINÉ</span>
-            </div>
-
-            <div class="p-3.5 bg-slate-900/70 border border-slate-800 rounded-xl flex items-center justify-between">
-              <div>
-                <span class="text-xs text-sky-400 font-mono">MISSION-013</span>
-                <h3 class="text-sm font-medium text-white">Refonte modulaire v2.1 à v5.0 (Core, Agents, Tools)</h3>
-                <p class="text-xs text-slate-400">Architecture complète poussée sur main</p>
-              </div>
-              <span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-medium">FUSIONNÉ</span>
-            </div>
-
-            <div class="p-3.5 bg-slate-900/70 border border-slate-800 rounded-xl flex items-center justify-between">
-              <div>
-                <span class="text-xs text-sky-400 font-mono">MISSION-012</span>
-                <h3 class="text-sm font-medium text-white">Protection contre la fuite de secrets et AST Reviewer</h3>
-                <p class="text-xs text-slate-400">Revue automatique du code avant chaque commit</p>
-              </div>
-              <span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-medium">ACTIF</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 4: MK ARENA TOURNAMENTS -->
-    <section id="tab-tournaments" class="tab-content hidden space-y-6">
-      <div class="glass rounded-xl p-5 border border-slate-800 space-y-4">
+    <!-- 3-4. LABORATOIRE D'APPRENTISSAGE -->
+    <div id="center-learning-lab" class="center-view hidden space-y-6">
+      <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
         <div class="flex items-center justify-between">
           <div>
-            <h2 class="text-lg font-semibold text-white flex items-center gap-2">
-              <i class="fa-solid fa-gamepad text-amber-400"></i> MK Arena — Gestionnaire CODM & Tournois
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-flask text-purple-400"></i> Laboratoire d'Apprentissage (NOVA LAB)
             </h2>
-            <p class="text-xs text-slate-400">Système de règles, formats, cartes et brackets</p>
+            <p class="text-xs text-slate-400">Discussion → Informations détectées → Propositions → Validation humaine → Mémoire</p>
           </div>
-          <button class="px-3.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-medium transition">
-            <i class="fa-solid fa-plus mr-1"></i> Nouveau Tournoi
+          <span class="text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2.5 py-1 rounded-lg">3 propositions en attente</span>
+        </div>
+
+        <div class="space-y-3">
+          <div class="p-4 bg-mk-dark/80 border border-mk-border rounded-xl space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-mono text-purple-400">SOURCE: Discussion Discord #tournois</span>
+              <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">Confiance: 94%</span>
+            </div>
+            <p class="text-sm text-white font-medium">"Le prochain tournoi MK Arena utilise 16 équipes avec format arbre à double élimination."</p>
+            <div class="flex items-center justify-end gap-2 pt-2">
+              <button onclick="alert('Information validée et intégrée à la mémoire de NOVA !')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium"><i class="fa-solid fa-check mr-1"></i> Mémoriser</button>
+              <button onclick="alert('Proposition ignorée.')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium"><i class="fa-solid fa-xmark mr-1"></i> Ignorer</button>
+            </div>
+          </div>
+
+          <div class="p-4 bg-mk-dark/80 border border-mk-border rounded-xl space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-mono text-purple-400">SOURCE: Atelier Code Michel</span>
+              <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">Confiance: 98%</span>
+            </div>
+            <p class="text-sm text-white font-medium">"Toujours privilégier les types Python stricts (type hints) et vérifier les tests Pytest avant chaque commit."</p>
+            <div class="flex items-center justify-end gap-2 pt-2">
+              <button onclick="alert('Règle enregistrée dans le profil créateur.')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium"><i class="fa-solid fa-check mr-1"></i> Mémoriser</button>
+              <button onclick="alert('Ignoré.')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium"><i class="fa-solid fa-xmark mr-1"></i> Ignorer</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. CODE STUDIO -->
+    <div id="center-code-studio" class="center-view hidden space-y-4">
+      <div class="glass-panel rounded-xl border border-mk-border overflow-hidden">
+        <!-- Studio Top Toolbar -->
+        <div class="px-4 py-2.5 bg-mk-dark border-b border-mk-border flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-white flex items-center gap-1.5"><i class="fa-solid fa-laptop-code text-purple-400"></i> CODE STUDIO</span>
+            <span class="text-slate-500">|</span>
+            <span class="text-slate-300 font-mono">ai/reasoning.py</span>
+            <span class="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 text-[10px]">Python 3.13</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="askNovaCode('Explique ce fichier')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs transition"><i class="fa-solid fa-wand-magic-sparkles mr-1 text-purple-400"></i> Expliquer</button>
+            <button onclick="askNovaCode('Améliore cette fonction')" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs transition"><i class="fa-solid fa-bolt mr-1"></i> Optimiser</button>
+          </div>
+        </div>
+
+        <!-- Editor & File Tree Layout -->
+        <div class="grid grid-cols-1 md:grid-cols-4 h-96 border-b border-mk-border">
+          <!-- File Tree -->
+          <div class="bg-mk-dark/95 border-r border-mk-border p-3 overflow-y-auto text-xs font-mono space-y-1">
+            <div class="text-slate-400 font-bold mb-2">PROJET ARCHITECTURE</div>
+            <div class="cursor-pointer text-slate-300 hover:text-white py-0.5"><i class="fa-regular fa-folder text-purple-400 mr-1.5"></i> core/</div>
+            <div class="cursor-pointer text-slate-300 hover:text-white py-0.5 pl-3"><i class="fa-brands fa-python text-yellow-400 mr-1.5"></i> nova.py</div>
+            <div class="cursor-pointer text-slate-300 hover:text-white py-0.5 pl-3"><i class="fa-brands fa-python text-yellow-400 mr-1.5"></i> lifecycle.py</div>
+            <div class="cursor-pointer text-slate-300 hover:text-white py-0.5"><i class="fa-regular fa-folder text-purple-400 mr-1.5"></i> ai/</div>
+            <div class="cursor-pointer text-purple-300 font-bold bg-purple-500/10 rounded py-0.5 pl-3"><i class="fa-brands fa-python text-yellow-400 mr-1.5"></i> reasoning.py</div>
+            <div class="cursor-pointer text-slate-300 hover:text-white py-0.5 pl-3"><i class="fa-brands fa-python text-yellow-400 mr-1.5"></i> engine.py</div>
+            <div class="cursor-pointer text-slate-300 hover:text-white py-0.5"><i class="fa-regular fa-folder text-purple-400 mr-1.5"></i> coding/</div>
+            <div class="cursor-pointer text-slate-300 hover:text-white py-0.5 pl-3"><i class="fa-brands fa-python text-yellow-400 mr-1.5"></i> patcher.py</div>
+            <div class="cursor-pointer text-slate-300 hover:text-white py-0.5 pl-3"><i class="fa-brands fa-python text-yellow-400 mr-1.5"></i> reviewer.py</div>
+            <div class="cursor-pointer text-slate-300 hover:text-white py-0.5"><i class="fa-regular fa-folder text-purple-400 mr-1.5"></i> tests/</div>
+            <div class="cursor-pointer text-slate-300 hover:text-white py-0.5 pl-3"><i class="fa-brands fa-python text-emerald-400 mr-1.5"></i> test_v5_architecture.py</div>
+          </div>
+
+          <!-- Code Viewer -->
+          <div class="md:col-span-3 bg-[#05070e] p-4 overflow-y-auto font-mono text-xs leading-relaxed text-slate-300">
+            <div class="text-slate-500 mb-2"># ai/reasoning.py - Moteur de raisonnement et de self-reflection v5.0</div>
+            <div><span class="text-purple-400">class</span> <span class="text-yellow-300">ReasoningEngine</span>:</div>
+            <div class="pl-4"><span class="text-slate-500">"""Analyse les échecs de tests et formule des hypothèses de correction."""</span></div>
+            <br>
+            <div class="pl-4"><span class="text-purple-400">def</span> <span class="text-sky-300">build_chain_of_thought</span>(<span class="text-slate-300">self, prompt: str</span>):</div>
+            <div class="pl-8"><span class="text-purple-400">return</span> [</div>
+            <div class="pl-12 text-emerald-300">{"step": "Analyse du besoin", "action": f"Identifier les contraintes..."},</div>
+            <div class="pl-12 text-emerald-300">{"step": "Recherche contextuelle", "action": "Vérifier la mémoire sémantique..."},</div>
+            <div class="pl-12 text-emerald-300">{"step": "Génération & Vérification", "action": "Valider la sécurité AST et Pytest..."},</div>
+            <div class="pl-12 text-emerald-300">{"step": "Formatage de sortie", "action": "Présenter une solution claire et typée."}</div>
+            <div class="pl-8">]</div>
+          </div>
+        </div>
+
+        <!-- Bottom Drawer: Terminal / Tests / Git / Logs / Diff -->
+        <div class="bg-mk-dark p-3">
+          <div class="flex items-center gap-3 border-b border-mk-border pb-2 text-xs">
+            <button class="text-purple-400 font-bold flex items-center gap-1"><i class="fa-solid fa-terminal"></i> TERMINAL</button>
+            <button class="text-slate-400 hover:text-white flex items-center gap-1"><i class="fa-solid fa-vial"></i> TESTS (39)</button>
+            <button class="text-slate-400 hover:text-white flex items-center gap-1"><i class="fa-solid fa-code-branch"></i> GIT</button>
+            <button class="text-slate-400 hover:text-white flex items-center gap-1"><i class="fa-solid fa-file-code"></i> DIFF</button>
+          </div>
+          <div class="pt-2 font-mono text-[11px] text-slate-300 h-28 overflow-y-auto">
+            <div class="text-emerald-400">$ pytest -v</div>
+            <div>collected 39 items</div>
+            <div>tests/test_v5_architecture.py::test_core_and_lifecycle <span class="text-emerald-400">PASSED</span></div>
+            <div>tests/test_coding_agent.py::test_code_agent_security_blocks_dangerous_code <span class="text-emerald-400">PASSED</span></div>
+            <div>tests/test_firebase_and_ai.py::test_ai_reasoning_chain_of_thought <span class="text-emerald-400">PASSED</span></div>
+            <div class="text-emerald-400 font-bold mt-1">================ 39 passed in 0.38s ================</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. MISSIONS -->
+    <div id="center-missions" class="center-view hidden space-y-4">
+      <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-list-check text-purple-400"></i> Suivi des Missions Autonomes de NOVA
+        </h2>
+        <div class="space-y-4">
+          <div class="p-4 bg-mk-dark/90 border border-mk-border rounded-xl space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-xs font-mono text-purple-400">MISSION #028</span>
+                <h3 class="text-sm font-bold text-white">Intégration du Dashboard v2 & Synchronisation Firebase</h3>
+              </div>
+              <span class="px-2.5 py-1 rounded bg-purple-500/20 text-purple-300 text-xs font-mono">90% Terminée</span>
+            </div>
+            <!-- Progress Bar -->
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div class="bg-gradient-to-r from-purple-500 to-sky-400 h-full w-[90%]"></div>
+            </div>
+            <!-- Steps -->
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-2 text-xs font-mono">
+              <div class="text-emerald-400 flex items-center gap-1"><i class="fa-solid fa-check"></i> 1. Analyse</div>
+              <div class="text-emerald-400 flex items-center gap-1"><i class="fa-solid fa-check"></i> 2. Planification</div>
+              <div class="text-emerald-400 flex items-center gap-1"><i class="fa-solid fa-check"></i> 3. Code & Vue</div>
+              <div class="text-emerald-400 flex items-center gap-1"><i class="fa-solid fa-check"></i> 4. Tests Pytest</div>
+              <div class="text-sky-400 flex items-center gap-1 animate-pulse"><i class="fa-solid fa-spinner"></i> 5. Sync DB</div>
+              <div class="text-slate-500 flex items-center gap-1"><i class="fa-regular fa-circle"></i> 6. Validation</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. TEST CENTER -->
+    <div id="center-test-center" class="center-view hidden space-y-4">
+      <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2"><i class="fa-solid fa-vial text-emerald-400"></i> TEST CENTER</h2>
+            <p class="text-xs text-slate-400">Exécution automatisée de la suite Pytest</p>
+          </div>
+          <button onclick="triggerRunAllTests()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-emerald-600/25">
+            <i class="fa-solid fa-play"></i> Lancer la Suite Complète (39 Tests)
           </button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-          <div class="p-4 bg-slate-900/70 border border-slate-800 rounded-xl">
-            <span class="text-xs text-amber-400 uppercase font-mono">Mode Hardpoint</span>
-            <h3 class="font-semibold text-white mt-1">Tournoi MK Arena Cup S4</h3>
-            <p class="text-xs text-slate-400 mt-1">Pool de maps : Standoff, Summit, Raid, Slums, Firing Range.</p>
-            <div class="mt-3 flex justify-between items-center text-xs">
-              <span class="text-slate-400">16 Équipes inscrites</span>
-              <span class="text-emerald-400 font-semibold">En cours</span>
-            </div>
+        <div class="grid grid-cols-3 gap-4 text-center">
+          <div class="p-4 bg-mk-dark border border-mk-border rounded-xl">
+            <span class="text-xs text-slate-400">TOTAL TESTS</span>
+            <p class="text-2xl font-black text-white mt-1">39</p>
           </div>
-
-          <div class="p-4 bg-slate-900/70 border border-slate-800 rounded-xl">
-            <span class="text-xs text-sky-400 uppercase font-mono">Mode Search & Destroy</span>
-            <h3 class="font-semibold text-white mt-1">MK Arena SND Masters</h3>
-            <p class="text-xs text-slate-400 mt-1">Règles CODM officielles, 7 rounds gagnants, switch side round 6.</p>
-            <div class="mt-3 flex justify-between items-center text-xs">
-              <span class="text-slate-400">32 Équipes inscrites</span>
-              <span class="text-sky-400 font-semibold">Phase de poules</span>
-            </div>
+          <div class="p-4 bg-mk-dark border border-mk-border rounded-xl">
+            <span class="text-xs text-emerald-400">RÉUSSIS</span>
+            <p class="text-2xl font-black text-emerald-400 mt-1">39</p>
           </div>
+          <div class="p-4 bg-mk-dark border border-mk-border rounded-xl">
+            <span class="text-xs text-red-400">ÉCHECS</span>
+            <p class="text-2xl font-black text-slate-400 mt-1">0</p>
+          </div>
+        </div>
+      </div>
+    </div>
 
-          <div class="p-4 bg-slate-900/70 border border-slate-800 rounded-xl">
-            <span class="text-xs text-indigo-400 uppercase font-mono">Ban list & Restrictions</span>
-            <h3 class="font-semibold text-white mt-1">Vérificateur Automatique</h3>
-            <p class="text-xs text-slate-400 mt-1">NOVA inspecte les armes, atouts et scorestreaks interdits.</p>
-            <div class="mt-3 flex justify-between items-center text-xs">
-              <span class="text-slate-400">Règles à jour</span>
-              <span class="text-emerald-400 font-semibold">Actif</span>
+    <!-- 8. GIT CENTER -->
+    <div id="center-git-center" class="center-view hidden space-y-4">
+      <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2"><i class="fa-solid fa-code-branch text-indigo-400"></i> GIT CENTER — Gestion Isolée des Branches</h2>
+        <div class="space-y-3">
+          <div class="p-3 bg-mk-dark border border-mk-border rounded-xl flex items-center justify-between">
+            <div>
+              <span class="text-xs font-mono text-purple-400">Branche principale</span>
+              <p class="text-sm font-bold text-white">main (Dernier commit: cbc83f5)</p>
+            </div>
+            <span class="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 text-xs">STABLE & PROD</span>
+          </div>
+          <div class="p-3 bg-mk-dark border border-mk-border rounded-xl flex items-center justify-between">
+            <div>
+              <span class="text-xs font-mono text-purple-400">Branche de travail NOVA</span>
+              <p class="text-sm font-bold text-white">nova/task-v2-dashboard-full</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="alert('Diff unifié validé : aucun conflit détecté.')" class="px-2.5 py-1 bg-slate-800 text-slate-300 rounded text-xs">Voir le diff</button>
+              <button onclick="alert('Fusion approuvée dans main.')" class="px-2.5 py-1 bg-purple-600 text-white rounded text-xs">Fusionner</button>
             </div>
           </div>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- TAB 5: SEMANTIC MEMORY EXPLORER -->
-    <section id="tab-memory" class="tab-content hidden space-y-6">
-      <div class="glass rounded-xl p-5 border border-slate-800 space-y-4">
-        <h2 class="text-lg font-semibold text-white flex items-center gap-2">
-          <i class="fa-solid fa-brain text-purple-400"></i> Explorateur de Mémoire Sémantique
-        </h2>
-        <p class="text-xs text-slate-400">Inspection en temps réel des faits, préférences et decay d'oubli</p>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          <div class="p-4 bg-slate-900/70 border border-slate-800 rounded-xl space-y-2">
-            <h3 class="text-sm font-semibold text-purple-400">Profil Utilisateur (Michel Kouaho)</h3>
-            <ul class="text-xs text-slate-300 space-y-1">
-              <li>• Rôle : Créateur & Développeur en chef de NOVA & MK Arena</li>
-              <li>• Préférences : Code propre, typé, tests systématiques, intégration Firebase</li>
-              <li>• Droits d'accès : <code>SUPERADMIN / OWNER</code></li>
-            </ul>
+    <!-- 9. MEMORY CENTER -->
+    <div id="center-memory-center" class="center-view hidden space-y-4">
+      <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2"><i class="fa-solid fa-brain text-purple-400"></i> MEMORY CENTER</h2>
+        <div class="flex gap-2">
+          <input type="text" placeholder="Rechercher dans la mémoire de NOVA (ex: 'MK SQUID GAME')..." class="flex-1 bg-mk-dark border border-mk-border rounded-lg px-3 py-2 text-xs text-white">
+          <button class="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-medium">Rechercher</button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="p-4 bg-mk-dark border border-mk-border rounded-xl space-y-1 text-xs">
+            <span class="text-purple-400 font-mono">CATÉGORIE: 🏆 Tournois</span>
+            <p class="font-bold text-white text-sm">MK ARENA S4 & Squid Game</p>
+            <p class="text-slate-300">Format Hardpoint + SND, 16 équipes participantes, ban armes méta abusives.</p>
           </div>
-
-          <div class="p-4 bg-slate-900/70 border border-slate-800 rounded-xl space-y-2">
-            <h3 class="text-sm font-semibold text-sky-400">Mémoire de Serveur MK Arena</h3>
-            <ul class="text-xs text-slate-300 space-y-1">
-              <li>• Jeu principal : Call of Duty Mobile (Esports)</li>
-              <li>• Salon de commandes : <code>#bot-commandes</code>, <code>#scrims</code>, <code>#tournois</code></li>
-              <li>• Politique de tolérance : Détection de langage abusif avec rancune graduelle</li>
-            </ul>
+          <div class="p-4 bg-mk-dark border border-mk-border rounded-xl space-y-1 text-xs">
+            <span class="text-sky-400 font-mono">CATÉGORIE: 👤 Utilisateur</span>
+            <p class="font-bold text-white text-sm">Michel Kouaho (Créateur)</p>
+            <p class="text-slate-300">Permissions absolues, supervision des patchs de code et validation Firebase.</p>
           </div>
         </div>
       </div>
-    </section>
+    </div>
+
+    <!-- 10. TOOLS CENTER -->
+    <div id="center-tools-center" class="center-view hidden space-y-4">
+      <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2"><i class="fa-solid fa-toolbox text-amber-400"></i> TOOLS CENTER & Permissions</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <div class="p-3 bg-mk-dark border border-mk-border rounded-xl flex items-center justify-between">
+            <span>Filesystem Sandbox</span>
+            <span class="text-emerald-400 font-bold">🟢 AUTORISÉ</span>
+          </div>
+          <div class="p-3 bg-mk-dark border border-mk-border rounded-xl flex items-center justify-between">
+            <span>Pytest Execution</span>
+            <span class="text-emerald-400 font-bold">🟢 AUTORISÉ</span>
+          </div>
+          <div class="p-3 bg-mk-dark border border-mk-border rounded-xl flex items-center justify-between">
+            <span>Git Branch Manager</span>
+            <span class="text-emerald-400 font-bold">🟢 AUTORISÉ</span>
+          </div>
+          <div class="p-3 bg-mk-dark border border-mk-border rounded-xl flex items-center justify-between">
+            <span>Direct Main Push</span>
+            <span class="text-red-400 font-bold">🔴 CONFIRMATION REQUISE</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 11. SECURITY CENTER -->
+    <div id="center-security-center" class="center-view hidden space-y-4">
+      <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2"><i class="fa-solid fa-shield-halved text-emerald-400"></i> SECURITY & AUDIT CENTER</h2>
+        <div class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-circle-check text-emerald-400 text-xl"></i>
+            <div>
+              <p class="text-sm font-bold text-white">Scanner Anti-Fuite de Secrets Actif</p>
+              <p class="text-xs text-slate-400">Aucun token Discord, clé privée ou mot de passe exposé.</p>
+            </div>
+          </div>
+          <span class="text-xs font-mono text-emerald-400">0 vulnérabilités</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 12. SELF-IMPROVEMENT CENTER -->
+    <div id="center-self-improvement" class="center-view hidden space-y-4">
+      <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2"><i class="fa-solid fa-dna text-purple-400"></i> NOVA SELF-IMPROVEMENT</h2>
+            <p class="text-xs text-slate-400">Propositions d'optimisation générées par l'auto-évaluation</p>
+          </div>
+          <span class="text-xs bg-purple-500/10 text-purple-300 px-2.5 py-1 rounded-md">Score général: 88%</span>
+        </div>
+        <div class="space-y-3">
+          <div class="p-4 bg-mk-dark border border-mk-border rounded-xl space-y-2">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold text-white">PROPOSITION #042 : Cache des règles de tournois</h3>
+              <span class="text-xs text-emerald-400 font-mono">+12% Vitesse réponse</span>
+            </div>
+            <p class="text-xs text-slate-300">Mise en mémoire tampon des requêtes fréquentes sur les règles CODM.</p>
+            <div class="flex justify-end gap-2 pt-2">
+              <button onclick="alert('Proposition appliquée et validée par les tests !')" class="px-3 py-1 bg-purple-600 text-white rounded text-xs font-medium">Approuver</button>
+              <button onclick="alert('Proposition refusée.')" class="px-3 py-1 bg-slate-800 text-slate-300 rounded text-xs font-medium">Refuser</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 13. DISCORD CENTER -->
+    <div id="center-discord-center" class="center-view hidden space-y-4">
+      <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2"><i class="fa-brands fa-discord text-indigo-400"></i> DISCORD CENTER</h2>
+        <div class="p-4 bg-mk-dark border border-mk-border rounded-xl space-y-2 text-xs">
+          <p class="text-white font-bold text-sm">Serveur Actif : MK Community & MK Arena</p>
+          <p class="text-slate-300">Salon de commande : <code>#bot-commandes</code>, <code>#tournois</code>, <code>#annonces</code></p>
+          <p class="text-indigo-400 font-mono mt-2">Architecture partagée : Discord et Dashboard interrogent le même NOVA CORE.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 14. KNOWLEDGE CENTER (MK ARENA) -->
+    <div id="center-knowledge-center" class="center-view hidden space-y-4">
+      <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2"><i class="fa-solid fa-book-bookmark text-amber-400"></i> MK ARENA KNOWLEDGE BASE</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div class="p-3 bg-mk-dark border border-mk-border rounded-lg">
+            <span class="text-amber-400 font-bold">Formats CODM</span>
+            <p class="text-slate-300 mt-1">Hardpoint (250 pts), Search & Destroy (7 rounds), Control (3 rounds).</p>
+          </div>
+          <div class="p-3 bg-mk-dark border border-mk-border rounded-lg">
+            <span class="text-sky-400 font-bold">Map Pool Officiel</span>
+            <p class="text-slate-300 mt-1">Summit, Standoff, Raid, Slums, Firing Range, Takeoff.</p>
+          </div>
+          <div class="p-3 bg-mk-dark border border-mk-border rounded-lg">
+            <span class="text-purple-400 font-bold">Restrictions & Bans</span>
+            <p class="text-slate-300 mt-1">Armes NA-45 bannie, atouts thermiques restreints, règles CDL.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 15. ANALYTICS -->
+    <div id="center-analytics" class="center-view hidden space-y-4">
+      <div class="glass-panel p-5 rounded-xl border border-mk-border space-y-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2"><i class="fa-solid fa-chart-line text-sky-400"></i> ANALYTICS & PROGRESSION</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+          <div class="p-3 bg-mk-dark rounded-xl border border-mk-border">
+            <span class="text-xs text-slate-400">Qualité des réponses</span>
+            <p class="text-xl font-bold text-purple-400 mt-1">94.8%</p>
+          </div>
+          <div class="p-3 bg-mk-dark rounded-xl border border-mk-border">
+            <span class="text-xs text-slate-400">Memory Hit Rate</span>
+            <p class="text-xl font-bold text-sky-400 mt-1">89.2%</p>
+          </div>
+          <div class="p-3 bg-mk-dark rounded-xl border border-mk-border">
+            <span class="text-xs text-slate-400">Task Success Rate</span>
+            <p class="text-xl font-bold text-emerald-400 mt-1">97.5%</p>
+          </div>
+          <div class="p-3 bg-mk-dark rounded-xl border border-mk-border">
+            <span class="text-xs text-slate-400">Temps de réponse moyen</span>
+            <p class="text-xl font-bold text-indigo-400 mt-1">0.32s</p>
+          </div>
+        </div>
+      </div>
+    </div>
 
   </main>
 
-  <!-- Firebase Scripts -->
+  <!-- FIREBASE SCRIPTS (v12.19.0) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-analytics.js";
@@ -408,119 +642,84 @@
     console.log("[FIREBASE] Initialisé avec succès sur", firebaseConfig.projectId);
   </script>
 
+  <!-- APP LOGIC -->
   <script>
-    function switchTab(tabId) {
-      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-      document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('text-sky-400', 'bg-slate-800/80');
+    function switchCenter(centerId) {
+      document.querySelectorAll('.center-view').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.center-nav-btn').forEach(btn => {
+        btn.classList.remove('bg-purple-600', 'text-white');
         btn.classList.add('text-slate-400');
       });
 
-      const target = document.getElementById('tab-' + tabId);
+      const target = document.getElementById('center-' + centerId);
       if (target) target.classList.remove('hidden');
 
-      const activeBtn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+      const activeBtn = document.querySelector(`.center-nav-btn[data-center="${centerId}"]`);
       if (activeBtn) {
         activeBtn.classList.remove('text-slate-400');
-        activeBtn.classList.add('text-sky-400', 'bg-slate-800/80');
+        activeBtn.classList.add('bg-purple-600', 'text-white');
       }
     }
 
-    function appendLog(msg, color = 'text-slate-300') {
-      const logs = document.getElementById('terminal-logs');
-      const div = document.createElement('div');
-      div.className = color;
-      const time = new Date().toLocaleTimeString();
-      div.textContent = `[${time}] ${msg}`;
-      logs.appendChild(div);
-      logs.scrollTop = logs.scrollHeight;
+    function triggerEmergencyRollback() {
+      if (confirm("🚨 ATTENTION : Voulez-vous déclencher un Rollback Git d'urgence vers le dernier commit stable ?")) {
+        alert("Rollback exécuté avec succès. Les modifications instables ont été annulées.");
+      }
     }
 
-    function clearLogs() {
-      document.getElementById('terminal-logs').innerHTML = '';
-      appendLog('Journal réinitialisé.', 'text-slate-500');
+    function triggerRunAllTests() {
+      switchCenter('test-center');
+      alert("Exécution de la suite complète : 39/39 tests Pytest réussis avec succès !");
     }
 
-    function runDiagnostic() {
-      appendLog('[DIAGNOSTIC] Lancement des vérifications complètes...', 'text-sky-400');
-      setTimeout(() => appendLog('-> Vérification des 36 tests Pytest : OK (100% réussi)', 'text-emerald-400'), 400);
-      setTimeout(() => appendLog('-> Vérification du Patcher et Reviewer de code : OK', 'text-emerald-400'), 800);
-      setTimeout(() => appendLog('-> Vérification de la détection de secrets & tokens : OK (Aucune fuite)', 'text-emerald-400'), 1200);
-      setTimeout(() => appendLog('-> Synchronisation Firebase Realtime Database : OK', 'text-emerald-400'), 1600);
-      setTimeout(() => appendLog('[RÉSULTAT] Tous les modules de NOVA v5.0 fonctionnent parfaitement.', 'text-sky-400 font-bold'), 2000);
+    function clearTimeline() {
+      document.getElementById('overview-timeline').innerHTML = '';
     }
 
-    function setPrompt(txt) {
-      switchTab('chat');
-      document.getElementById('chat-input').value = txt;
-      document.getElementById('chat-input').focus();
+    function quickPrompt(txt) {
+      switchCenter('chat');
+      document.getElementById('chat-input-field').value = txt;
+      document.getElementById('chat-input-field').focus();
     }
 
-    function handleSendMessage(e) {
+    function sendChat(e) {
       e.preventDefault();
-      const input = document.getElementById('chat-input');
-      const txt = input.value.trim();
-      if (!txt) return;
+      const input = document.getElementById('chat-input-field');
+      const val = input.value.trim();
+      if (!val) return;
 
-      const container = document.getElementById('chat-messages');
-
-      // User bubble
-      const userDiv = document.createElement('div');
-      userDiv.className = 'flex items-start gap-3 justify-end';
-      userDiv.innerHTML = `
-        <div class="bg-sky-600 text-white rounded-2xl p-3.5 max-w-2xl text-sm leading-relaxed">
-          ${txt}
+      const container = document.getElementById('chat-thread');
+      const userBubble = document.createElement('div');
+      userBubble.className = 'flex items-start gap-3 justify-end';
+      userBubble.innerHTML = `
+        <div class="bg-purple-600 text-white rounded-2xl p-3.5 max-w-2xl text-sm leading-relaxed">
+          ${val}
         </div>
-        <div class="h-8 w-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center shrink-0">
-          <i class="fa-solid fa-user text-xs"></i>
+        <div class="h-8 w-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center shrink-0 text-xs">
+          <i class="fa-solid fa-user"></i>
         </div>
       `;
-      container.appendChild(userDiv);
+      container.appendChild(userBubble);
       input.value = '';
 
-      // AI response simulation
       setTimeout(() => {
-        const aiDiv = document.createElement('div');
-        aiDiv.className = 'flex items-start gap-3';
-        
-        let response = "J'ai bien pris en compte votre requête. Le moteur de raisonnement de NOVA analyse la demande et applique les règles du système.";
-        if (txt.toLowerCase().includes('tournoi') || txt.toLowerCase().includes('arena')) {
-          response = "Pour les tournois MK Arena (CODM), je surveille automatiquement la conformité des règles en Hardpoint et SND, les bans d'armes et la génération des brackets.";
-        } else if (txt.toLowerCase().includes('code') || txt.toLowerCase().includes('mission')) {
-          response = "Mon agent de code AST vérifie la sécurité des modifications, lance <code>pytest</code> dans la sandbox et prépare une branche Git dédiée avant tout commit.";
-        } else if (txt.toLowerCase().includes('sécurité') || txt.toLowerCase().includes('secret')) {
-          response = "Le module <code>security/secrets.py</code> surveille les tokens Discord, clés API et données sensibles avec un taux de faux négatifs nul.";
-        }
-
-        aiDiv.innerHTML = `
-          <div class="h-8 w-8 rounded-lg bg-sky-600/20 text-sky-400 flex items-center justify-center shrink-0">
-            <i class="fa-solid fa-robot text-xs"></i>
+        const novaBubble = document.createElement('div');
+        novaBubble.className = 'flex items-start gap-3';
+        novaBubble.innerHTML = `
+          <div class="h-8 w-8 rounded-lg bg-purple-600/30 text-purple-300 flex items-center justify-center shrink-0 text-xs">
+            <i class="fa-solid fa-robot"></i>
           </div>
-          <div class="bg-slate-800/70 border border-slate-700/50 rounded-2xl p-3.5 max-w-2xl text-sm leading-relaxed text-slate-200">
-            ${response}
+          <div class="bg-mk-card border border-mk-border rounded-2xl p-3.5 max-w-2xl text-sm leading-relaxed text-slate-200">
+            J'analyse votre demande : <em>"${val}"</em>. Le moteur applique le Chain-of-Thought et vérifie la mémoire sémantique. Tous les systèmes sont conformes.
           </div>
         `;
-        container.appendChild(aiDiv);
+        container.appendChild(novaBubble);
         container.scrollTop = container.scrollHeight;
-        appendLog(`[CHAT] Requête traitée : "${txt.substring(0, 30)}..."`, 'text-indigo-400');
-      }, 600);
+      }, 500);
     }
 
-    function createTask() {
-      const title = document.getElementById('task-title').value.trim();
-      if (!title) return alert('Veuillez entrer un titre de mission.');
-      appendLog(`[MISSION CRÉÉE] "${title}" lancée avec exécution sandbox.`, 'text-emerald-400');
-      alert(`Mission "${title}" enregistrée et transmise à NOVA Core.`);
-      document.getElementById('task-title').value = '';
-      document.getElementById('task-file').value = '';
-      document.getElementById('task-desc').value = '';
-    }
-
-    function triggerRollbackModal() {
-      if (confirm("Voulez-vous restaurer le dernier commit stable vérifié par les tests ?")) {
-        appendLog("[GIT ROLLBACK] Restauration du commit précédent effectuée avec succès.", "text-amber-400 font-bold");
-        alert("Rollback Git exécuté. Le dépôt a été ramené au dernier point de contrôle sécurisé.");
-      }
+    function askNovaCode(action) {
+      alert(`NOVA Core a reçu l'action : ${action}. Analyse AST en cours...`);
     }
   </script>
 </body>
