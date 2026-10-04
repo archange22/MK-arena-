@@ -53,7 +53,7 @@ class NovaClient(discord.Client):
         self.tree = app_commands.CommandTree(self)
         self.context = ConversationMemory(db, settings.context_ttl_minutes, getattr(settings, "max_context_messages", 20))
         self.knowledge = KnowledgeManager(db)
-        self.engine = NovaEngine(self.knowledge, self.context)
+        self.engine = NovaEngine(self.knowledge, self.context, self.db)
         self.antiraid = AntiRaidManager(max_joins=5, window_seconds=10)
         self.automod = AutoModManager()
         self.leveling = LevelingManager(db)
@@ -404,6 +404,12 @@ class NovaClient(discord.Client):
                 )
                 await message.channel.send(embed=embed)
 
+        # 2.5 Déclencheurs automatiques / Custom Triggers (ex: !staff, !recrutement, etc.)
+        matched_trigger = self.db.find_matching_trigger(message.guild.id, message.content)
+        if matched_trigger:
+            await message.channel.send(matched_trigger["response_text"])
+            return
+
         # 3. Conversation & Commandes IA / GLaDOS
         if not self.engine.is_called(message.content):
             return
@@ -445,6 +451,42 @@ class NovaClient(discord.Client):
         reference_context = None
         if message.reference and message.reference.resolved and isinstance(message.reference.resolved, discord.Message):
             reference_context = message.reference.resolved.content
+
+        # 3.1 Gestion des règles personnalisées en langage naturel
+        rule_action, rule_trig, rule_resp = self.engine.parse_rule_instruction(content)
+        if rule_action == "add" and rule_trig and rule_resp:
+            if not isinstance(message.author, discord.Member) or not can_manage_nova(message.author):
+                await message.reply("⛔ Vous n'avez pas la permission d'ajouter des règles personnalisées pour NOVA.")
+                return
+            self.db.add_custom_trigger(message.guild.id, rule_trig, rule_resp, created_by=message.author.id)
+            await message.reply(
+                f"✅ **Règle enregistrée avec succès !**\n"
+                f"Désormais, dès que quelqu'un tape `{rule_trig}`, j'enverrai automatiquement :\n"
+                f"> {rule_resp}"
+            )
+            return
+
+        if rule_action == "delete" and rule_trig:
+            if not isinstance(message.author, discord.Member) or not can_manage_nova(message.author):
+                await message.reply("⛔ Vous n'avez pas la permission de supprimer des règles personnalisées.")
+                return
+            deleted = self.db.delete_custom_trigger(message.guild.id, rule_trig)
+            if deleted:
+                await message.reply(f"🗑️ La règle pour `{rule_trig}` a bien été supprimée.")
+            else:
+                await message.reply(f"❓ Aucune règle active trouvée pour `{rule_trig}`.")
+            return
+
+        if rule_action == "list":
+            triggers = self.db.get_custom_triggers(message.guild.id)
+            if not triggers:
+                await message.reply("📋 Aucune règle personnalisée n'est actuellement configurée sur ce serveur.")
+                return
+            lines = ["📋 **Commandes & Règles automatiques actives sur ce serveur :**"]
+            for t in triggers:
+                lines.append(f"• `{t['trigger_text']}` ➔ {t['response_text'][:80]}")
+            await message.reply("\n".join(lines))
+            return
 
         quoted_staff = content.strip().startswith('"') and content.strip().endswith('"')
         if quoted_staff:

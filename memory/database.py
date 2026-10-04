@@ -121,11 +121,34 @@ class Database:
                     label TEXT
                 );
 
+                -- Table des déclencheurs et commandes personnalisées (Custom Triggers)
+                CREATE TABLE IF NOT EXISTS custom_triggers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id INTEGER NOT NULL,
+                    trigger_text TEXT NOT NULL,
+                    response_text TEXT NOT NULL,
+                    action_type TEXT DEFAULT "reply",
+                    created_by INTEGER,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Table de rancune et d'humeur envers les utilisateurs (Grudge Level)
+                CREATE TABLE IF NOT EXISTS user_grudges (
+                    guild_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    grudge_level INTEGER DEFAULT 0,
+                    last_insult TEXT,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (guild_id, user_id)
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_knowledge_guild ON knowledge(guild_id);
                 CREATE INDEX IF NOT EXISTS idx_tournaments_guild ON tournaments(guild_id);
                 CREATE INDEX IF NOT EXISTS idx_tournaments_name ON tournaments(name);
                 CREATE INDEX IF NOT EXISTS idx_warns_guild_user ON warns(guild_id, user_id);
                 CREATE INDEX IF NOT EXISTS idx_levels_guild_xp ON user_levels(guild_id, xp DESC);
+                CREATE INDEX IF NOT EXISTS idx_triggers_guild ON custom_triggers(guild_id);
+                CREATE INDEX IF NOT EXISTS idx_triggers_text ON custom_triggers(guild_id, trigger_text);
                 """
             )
             conn.commit()
@@ -303,3 +326,77 @@ class Database:
             (guild_id, limit),
         )
         return [dict(r) for r in rows]
+
+
+    # --- Custom Triggers / Commandes personnalisées ---
+    def add_custom_trigger(self, guild_id: int, trigger_text: str, response_text: str, created_by: int = None, action_type: str = "reply") -> int:
+        clean_trig = trigger_text.strip().lower()
+        # Delete previous matching trigger if exists
+        self.execute("DELETE FROM custom_triggers WHERE guild_id = ? AND LOWER(trigger_text) = ?", (guild_id, clean_trig))
+        sql = """
+            INSERT INTO custom_triggers (guild_id, trigger_text, response_text, action_type, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """
+        return self.execute(sql, (guild_id, trigger_text.strip(), response_text.strip(), action_type, created_by))
+
+    def get_custom_triggers(self, guild_id: int) -> list[dict]:
+        rows = self.query("SELECT * FROM custom_triggers WHERE guild_id = ? ORDER BY id DESC", (guild_id,))
+        return [dict(r) for r in rows]
+
+    def find_matching_trigger(self, guild_id: int, text: str) -> dict | None:
+        if not text:
+            return None
+        cleaned = text.strip().lower()
+        triggers = self.get_custom_triggers(guild_id)
+        for t in triggers:
+            trig_val = t["trigger_text"].strip().lower()
+            if cleaned == trig_val or cleaned.startswith(trig_val + " ") or cleaned.startswith(trig_val + ":"):
+                return t
+        return None
+
+    def delete_custom_trigger(self, guild_id: int, trigger_text: str) -> bool:
+        clean_trig = trigger_text.strip().lower()
+        rows = self.query("SELECT id FROM custom_triggers WHERE guild_id = ? AND LOWER(trigger_text) = ?", (guild_id, clean_trig))
+        if rows:
+            self.execute("DELETE FROM custom_triggers WHERE guild_id = ? AND LOWER(trigger_text) = ?", (guild_id, clean_trig))
+            return True
+        return False
+
+    def delete_custom_trigger_by_id(self, guild_id: int, trigger_id: int) -> bool:
+        rows = self.query("SELECT id FROM custom_triggers WHERE guild_id = ? AND id = ?", (guild_id, trigger_id))
+        if rows:
+            self.execute("DELETE FROM custom_triggers WHERE guild_id = ? AND id = ?", (guild_id, trigger_id))
+            return True
+        return False
+
+    # --- Gestion de la rancune / Humeur (Grudge System) ---
+    def get_user_grudge(self, guild_id: int, user_id: int) -> int:
+        rows = self.query("SELECT grudge_level FROM user_grudges WHERE guild_id = ? AND user_id = ?", (guild_id, user_id))
+        if rows:
+            return int(rows[0]["grudge_level"] or 0)
+        return 0
+
+    def increment_user_grudge(self, guild_id: int, user_id: int, reason: str = "") -> int:
+        current = self.get_user_grudge(guild_id, user_id)
+        new_level = min(current + 1, 5)
+        sql = """
+            INSERT INTO user_grudges (guild_id, user_id, grudge_level, last_insult, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                grudge_level = excluded.grudge_level,
+                last_insult = excluded.last_insult,
+                updated_at = CURRENT_TIMESTAMP
+        """
+        self.execute(sql, (guild_id, user_id, new_level, reason))
+        return new_level
+
+    def reset_user_grudge(self, guild_id: int, user_id: int):
+        sql = """
+            INSERT INTO user_grudges (guild_id, user_id, grudge_level, last_insult, updated_at)
+            VALUES (?, ?, 0, '', CURRENT_TIMESTAMP)
+            ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                grudge_level = 0,
+                last_insult = '',
+                updated_at = CURRENT_TIMESTAMP
+        """
+        self.execute(sql, (guild_id, user_id))

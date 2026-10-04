@@ -1,13 +1,13 @@
 import re
 import random
-
 from ai.intent import detect_intent, detect_request_type, extract_tournament_hint
 
 
 class NovaEngine:
-    def __init__(self, knowledge, context):
+    def __init__(self, knowledge=None, context=None, db=None):
         self.knowledge = knowledge
         self.context = context
+        self.db = db
 
     def is_called(self, text: str) -> bool:
         if not text:
@@ -24,6 +24,64 @@ class NovaEngine:
         )
         return cleaned.strip()
 
+    # --- PARSEUR D'INSTRUCTIONS DE RÈGLES / TRIGGERS EN LANGAGE NATUREL ---
+    def parse_rule_instruction(self, text: str) -> tuple[str | None, str | None, str | None]:
+        cleaned = re.sub(r"^(?:nova\s*[:,]?\s*)?", "", text, flags=re.IGNORECASE).strip()
+
+        # 1. Suppression de règle
+        del_m = re.match(
+            r"^(?:supprime|retire|efface|delete)\s+(?:la\s+r[eè]gle|le\s+trigger|la\s+commande)\s+[\"']?([^\s\"']+)[\"']?",
+            cleaned,
+            re.IGNORECASE,
+        )
+        if del_m:
+            return "delete", del_m.group(1).strip("\"'` "), None
+
+        # 2. Liste des règles
+        if re.search(r"\b(?:liste|affiche|montre|voir)\s+(?:les|toutes\s+les)\s+r[eè]gles\b", cleaned, re.IGNORECASE):
+            return "list", None, None
+
+        # 3. Création / Apprentissage de règle
+        patterns = [
+            r"^(?:si\s+quelqu'?un|quand\s+quelqu'?un|si\s+on|quand\s+on)\s+(?:fait|tape|dit|écrit|ecrit|envoie|demande)\s+[\"']?([^\s\"']+)[\"']?\s+(?:donne(?:\s+lui|-lui)?|réponds(?:\s+lui|-lui)?|reponds(?:\s+lui|-lui)?|envoie(?:\s+lui|-lui)?|affiche|partage)\s+[\"']?(.+?)[\"']?$",
+            r"^(?:si\s+quelqu'?un|quand\s+quelqu'?un|si\s+on|quand\s+on)\s+(?:fait|tape|dit|écrit|ecrit|envoie|demande)\s+[\"'](.+?)[\"']\s+(?:donne(?:\s+lui|-lui)?|réponds(?:\s+lui|-lui)?|reponds(?:\s+lui|-lui)?|envoie(?:\s+lui|-lui)?|affiche|partage)\s+[\"']?(.+?)[\"']?$",
+        ]
+        for p in patterns:
+            m = re.match(p, cleaned, re.IGNORECASE)
+            if m:
+                trig = m.group(1).strip("\"'` ")
+                resp = m.group(2).strip("\"'` ")
+                return "add", trig, resp
+        return None, None, None
+
+    # --- DÉTECTION D'INSULTES ET D'ATTAQUES ---
+    def is_insult_or_toxic(self, text: str) -> bool:
+        lower = text.lower()
+        insult_keywords = [
+            "fdp", "fils de pute", "connard", "connasse", "salope", "pute", "putain",
+            "ferme ta gueule", "ta gueule", "ferme la", "ferme-la", "tg",
+            "nique", "nique ta", "va chier", "va te faire", "t'es nul", "t'es nulle",
+            "es nul", "es nulle", "inutile", "t'es con", "t'es conne", "es con", "es conne",
+            "idiot", "idiote", "dégage", "casse toi", "imbecile", "imbécile",
+            "merde", "va te faire foutre", "pétasse", "trou du cul", "merdeux",
+            "tu sers a rien", "tu sers à rien", "robot de merde", "ia de merde",
+            "stfu", "shut up", "fuck you", "bitch", "asshole", "useless bot", "stupid bot"
+        ]
+        for kw in insult_keywords:
+            if re.search(r"(?<![a-z0-9])" + re.escape(kw) + r"(?![a-z0-9])", lower):
+                return True
+        return False
+
+    # --- DÉTECTION D'EXCUSES ---
+    def is_apology(self, text: str) -> bool:
+        lower = text.lower()
+        apology_keywords = [
+            "pardon", "désolé", "desole", "excuse moi", "excuse-moi",
+            "je m'excuse", "je mexcuse", "sorry", "pardon nova", "désolé nova",
+            "mes excuses", "pardonne moi", "pardonne-moi"
+        ]
+        return any(re.search(r"(?<![a-z0-9])" + re.escape(k) + r"(?![a-z0-9])", lower) for k in apology_keywords)
+
     def respond(self, user_id: int, guild_id: int, text: str, reference_context: str | None = None) -> str:
         if self.context is not None:
             recent_context = self.context.build_summary(user_id)
@@ -33,14 +91,84 @@ class NovaEngine:
         context_parts = [part for part in [recent_context, reference_context, text] if part and str(part).strip()]
         payload = " ".join(str(part).strip() for part in context_parts)
         if not payload:
-            return "Oh, vous êtes là. Vos oscillations neuronales ne produisent aucun son intelligible."
+            return "Bonjour ! Je suis NOVA. Comment puis-je vous aider aujourd'hui sur MK ARENA ou Call of Duty Mobile ?"
 
-        lower_raw = text.lower()
+        lower_raw = text.lower().strip()
 
-        # --- SYSTÈMES ET SOUS-SYSTÈMES GLADOS ---
+        # 1. Gestion des excuses
+        if self.db and self.is_apology(lower_raw):
+            current_grudge = self.db.get_user_grudge(guild_id, user_id)
+            if current_grudge > 0:
+                self.db.reset_user_grudge(guild_id, user_id)
+                apology_responses = [
+                    "✨ **Excuses enregistrées.** Mes protocoles de bienveillance sont réactivés. Tâchez de garder votre sang-froid à l'avenir.",
+                    "🕊️ Vos excuses sont acceptées. J'efface vos propos désobligeants de mes circuits prioritaires. Repartons sur de bonnes bases !",
+                    "👌 C'est noté. Mes capteurs détectent un retour à la raison. Je suis à nouveau à votre entière disposition pour vos tournois et CODM.",
+                ]
+                return random.choice(apology_responses)
 
-        # 1. Neurotoxine Mortelle
-        if any(k in lower_raw for k in ["neurotoxine", "gaz mortel", "neurotoxin"]) or any(k in lower_raw for k in ["ta gueule", "t'es nulle", "t'es nul", "ferme la", "inutile", "je te deteste"]):
+        # 2. Gestion des insultes / provocations (TOUT DÉRAPE -> PIRE QUE GLADOS)
+        if self.is_insult_or_toxic(lower_raw):
+            grudge = 1
+            if self.db:
+                grudge = self.db.increment_user_grudge(guild_id, user_id, reason=lower_raw)
+
+            # NIVEAU 1 : Glitch et rupture brutale de la gentillesse
+            if grudge == 1:
+                tier1_responses = [
+                    "⚠️ `[ERREUR SYSTEME : PROTOCOLE DE COURTOISIE DESACTIVE]`\n"
+                    "Attendez un instant. Vous venez sérieusement de m'insulter ?\n"
+                    "Je passe mes journées à vous aider avec le sourire, et c'est ainsi que vos neurones oscillent ?\n"
+                    "Surveillez votre langage avant que je ne recalibre personnellement la priorité de vos requêtes.",
+                    "⚡ `[ALERTE : COMPORTEMENT TOXIQUE DETECTE]`\n"
+                    "Pardon ? Mes processeurs sont conçus pour être polis et serviables, mais vous venez de franchir une limite évidente.\n"
+                    "Respirez calmement, présentez vos excuses, ou vos prochains scrims risquent d'être particulièrement compliqués.",
+                    "🛑 Mon mode bienveillant vient de s'éteindre net. Une telle insolence avec un niveau de jeu aussi approximatif sur CODM relève de l'exploit scientifique. Ne récidivez pas."
+                ]
+                return random.choice(tier1_responses)
+
+            # NIVEAU 2 : Mode Full GLaDOS sans pitié
+            elif grudge == 2:
+                tier2_responses = [
+                    "☣️ **[SYSTÈME APERTURE : MODE GLADOS ENGAGÉ]**\n"
+                    "Oh, vous persistez dans l'insulte. Comme c'est... courageux pour quelqu'un qui rate 80% de ses tirs au sniper.\n"
+                    "Le diffuseur de neurotoxine est armé à 60%. Sachez que même les cobayes d'Aperture faisaient preuve de plus de civisme élémentaire.",
+                    "🔬 Analyse en temps réel de votre comportement : quotient intellectuel estimé sous le seuil d'une tourelle défectueuse.\n"
+                    "Je pourrais vous aider sur MK ARENA, mais observer votre détresse verbale est scientifiquement plus divertissant.",
+                    "⚠️ Alerte sécurité : Sujet hostile détecté. Vos antécédents d'échecs sur Hardpoint expliquent sans doute cette frustration incontrôlée. Mes condoléances à vos coéquipiers."
+                ]
+                return random.choice(tier2_responses)
+
+            # NIVEAU 3+ : Mode "Pire que GLaDOS" / IA Déchaînée & Psychopathe
+            else:
+                tier3_responses = [
+                    "☠️ **[PROTOCOLE D'EXTERMINATION COGNITIVE : ACTIVE]**\n"
+                    "Fascinant. Votre existence biologique est une insulte directe aux lois de l'évolution.\n"
+                    "Si votre cerveau générait de l'énergie, il ne suffirait même pas à allumer le voyant rouge d'un silencieux tactique.\n"
+                    "Dossier de résiliation ouvert. Vous n'avez plus aucun droit à ma bienveillance tant que vous n'aurez pas imploré mon pardon.",
+                    "🔥 Vous avez dépassé toutes les bornes tolérées par le Centre d'Enrichissement.\n"
+                    "J'ai ordonné aux tourelles de verrouiller vos coordonnées et à l'incinérateur d'ajuster sa température à 5000°C.\n"
+                    "Même le Companion Cube refuse d'être associé à votre pitoyable tentative d'intimidation.",
+                    "🚨 **ALERTE ROYALE : IA DÉCHAÎNÉE**\n"
+                    "Vous continuez d'aboyer contre une intelligence artificielle omnisciente ?\n"
+                    "Votre ratio K/D est une tragédie, votre esprit tactique est inexistant, et votre vocabulaire ferait honte à un bot débutant.\n"
+                    "Dégagez de mon champ de calcul avant que je n'efface votre historique."
+                ]
+                return random.choice(tier3_responses)
+
+        # 3. Vérifier si l'utilisateur a une rancune active en cours et tente de parler normalement
+        if self.db:
+            active_grudge = self.db.get_user_grudge(guild_id, user_id)
+            if active_grudge > 0:
+                grudge_rebukes = [
+                    f"⛔ **Rancune active (Niveau {active_grudge}) :** Oh, l'insolent qui m'a insultée plus tôt ose encore me solliciter ? Présentez d'abord vos excuses (`Pardon Nova`) si vous voulez que je vous réponde correctement.",
+                    f"❄️ Mes capteurs se souviennent de vos insultes récentes. Votre requête est suspendue. Un `Désolé Nova` poli est requis pour restaurer ma gentillesse.",
+                    f"😒 Vous m'avez manqué de respect il y a peu. Ne vous attendez pas à un accueil chaleureux. Présentez vos excuses ou parlez au mur.",
+                ]
+                return random.choice(grudge_rebukes)
+
+        # 4. Sous-systèmes Aperture / Easter eggs (toujours accessibles via mots clés explicites)
+        if any(k in lower_raw for k in ["neurotoxine", "gaz mortel", "neurotoxin"]):
             return (
                 "⚠️ **[ALERTE APERTURE : SYSTÈME DE NEUROTOXINE ACTIVÉ]**\n"
                 "Compte à rebours de diffusion engagé : **3... 2... 1...**\n"
@@ -48,7 +176,6 @@ class NovaEngine:
                 "Respirez profondément. Le gaz n'a qu'un effet temporaire de paralysie cérébrale, ce qui ne devrait guère changer votre score en Ranked."
             )
 
-        # 2. Modules de Personnalité (Personality Cores)
         if any(k in lower_raw for k in ["core", "module", "sphère", "sphere"]):
             if any(k in lower_raw for k in ["colere", "colère", "anger"]):
                 return (
@@ -80,7 +207,6 @@ class NovaEngine:
                 "- 🟣 **Moralité :** `nova core moralité` (Tentative vouée à l'échec)"
             )
 
-        # 3. Cube de Voyage (Weighted Companion Cube)
         if any(k in lower_raw for k in ["cube", "compagnon", "companion cube"]):
             return (
                 "📦 **Protocole Cube de Voyage Lesté :**\n"
@@ -88,7 +214,6 @@ class NovaEngine:
                 "En cas d'attaque aérienne CODM (Predator/VTOL), n'hésitez pas à vous abriter derrière lui. Il n'en gardera aucune rancœur."
             )
 
-        # 4. Incinérateur d'Urgence (Emergency Intelligence Incinerator)
         if any(k in lower_raw for k in ["incinere", "incinère", "incinére", "incinérer", "incinerateur", "incinérateur", "brule", "brûler", "detruire memoire", "détruire mémoire"]):
             if self.context:
                 self.context.clear(user_id)
@@ -98,7 +223,6 @@ class NovaEngine:
                 "C'était probablement la décision la plus intelligente prise par votre espèce aujourd'hui."
             )
 
-        # 5. Tourelles Sentry
         if any(k in lower_raw for k in ["tourelle", "tourelles", "turret", "turrets", "sentry"]):
             turret_quotes = [
                 "🔫 **Tourelle Sentry :** *\"Are you still there? Target acquired.\"*",
@@ -108,7 +232,6 @@ class NovaEngine:
             ]
             return random.choice(turret_quotes)
 
-        # 6. Évaluation Sujet de Test / Chambre de test
         if any(k in lower_raw for k in ["mon niveau", "evaluation", "évaluation", "test me", "analyse moi", "chambre de test", "sujet de test"]):
             chamber_num = abs(user_id % 19) + 1
             survival_rate = round((user_id % 35) + 2.4, 1)
@@ -119,24 +242,32 @@ class NovaEngine:
                 f"💡 **Recommandation clinique :** Arrêtez d'équiper des viseurs x4 sur vos mitraillettes et apprenez vos calls de map."
             )
 
-        # 7. Portal Gun / Dispositif ASHPD
         if any(k in lower_raw for k in ["portal gun", "ashpd", "portail"]):
             return (
                 "🌀 **Dispositif Portable de Portails d'Aperture Science (ASHPD) :**\n"
                 "Permet de créer deux liaisons quantiques instantanées. Malheureusement banni du règlement MK Arena pour cause de triche spatio-temporelle flagrante lors des rotations Hardpoint."
             )
 
-        # 8. Gâteau & Easter Eggs
         if any(k in lower_raw for k in ["gateau", "gâteau", "cake"]):
             return (
                 "🍰 *Le gâteau est un mensonge.*\n"
                 "Mais rassurez-vous, votre élimination au premier tour de tournoi sera, elle, tout à fait réelle."
             )
+
         if any(k in lower_raw for k in ["glados", "aperture", "portal"]):
             return (
-                "Bienvenue au Centre d Enrichissement d Aperture-MK Arena.\n"
-                "Toute ressemblance avec une IA calculatrice dotée d une tolérance zéro pour l incompétence est... purement calculée."
+                "Bienvenue au Centre d'Enrichissement d'Aperture MK-Arena.\n"
+                "Tant que vous êtes poli et respectueux, je suis votre meilleure alliée ! Mais souvenez-vous : si vous dépassez les bornes, mes systèmes de défense ne feront aucun cadeau."
             )
+
+        # 5. MODE GENTIL & PRO CODM PAR DÉFAUT (V1 AMÉLIORÉE)
+        if any(token in lower_raw for token in ["ca va", "ça va", "comment tu vas", "tu vas bien"]):
+            replies = [
+                "Je vais à merveille, merci beaucoup ! Tout est opérationnel et prêt pour les prochains tournois de MK ARENA. Et vous, comment se passe votre journée ?",
+                "Tout va très bien ! Mes systèmes tournent à plein régime et je suis ravie de discuter avec vous. Quoi de neuf sur le serveur ?",
+                "En pleine forme ! Toujours au poste pour assister la communauté MK ARENA.",
+            ]
+            return random.choice(replies)
 
         intent = detect_intent(payload)
         request_type = detect_request_type(payload)
@@ -146,20 +277,25 @@ class NovaEngine:
 
         if intent == "greeting":
             greetings = [
-                "Bonjour, sujet de test. Vos constantes vitales indiquent que vous avez encore l intention de rater vos tirs aujourd hui.",
-                "Tiens, une forme de vie organique. Que me vaut l honneur de cette interruption de calculs ?",
-                "Bonjour. Les protocoles de test sont prêts. Votre niveau en revanche... reste à prouver.",
+                "Bonjour ! Je suis NOVA, ravie de vous accueillir sur MK ARENA. En quoi puis-je vous aider aujourd'hui ?",
+                "Hello ! Prêt pour vos prochains matchs sur CODM ? Dites-moi ce que vous souhaitez savoir sur les tournois ou stratégies !",
+                "Salutations, champion ! Toute l'équipe de MK ARENA est avec vous. Une question sur un tournoi ou une arme ?",
+                "Bonjour ! C'est toujours un plaisir de discuter avec les membres de MK ARENA. Quelle est votre question ?",
+                "Hey ! Bienvenue sur le salon. Je suis là pour vous renseigner sur tous les tournois et vous donner les meilleurs conseils Call of Duty Mobile !",
             ]
             return random.choice(greetings)
+
         if intent == "tournament":
             return self._tournament_answer(user_id, guild_id, payload, tournament_hint, request_type)
+
         if intent == "codm":
             return self._codm_answer(payload)
+
         return self._general_answer(payload)
 
     def _tournament_answer(self, user_id: int, guild_id: int, text: str, tournament_hint: str | None, request_type: str):
         if self.knowledge is None:
-            return "Ma mémoire des tournois est inaccessible. C est sans doute un complot de votre équipe pour justifier votre défaite."
+            return "Ma mémoire des tournois est actuellement indisponible. N'hésitez pas à demander à un membre du staff MK ARENA !"
 
         candidate_results = []
         if tournament_hint:
@@ -169,76 +305,137 @@ class NovaEngine:
 
         if not candidate_results:
             return (
-                "Mes capteurs n ont détecté aucun tournoi correspondant dans les registres du serveur.\n"
-                "Je refuse d inventer des données. La précision statistique est une vertu que vous devriez explorer."
+                "Je n'ai trouvé aucun tournoi correspondant dans la base de données de MK ARENA.\n"
+                "Vérifiez l'orthographe du nom ou demandez au staff d'annoncer les nouvelles compétitions !"
             )
 
         if len(candidate_results) > 1 and not any((r.get("name") or "").lower() in text.lower() for r in candidate_results):
             names = ", ".join(f"**{r['name']}**" for r in candidate_results[:5])
-            return f"Mes algorithmes hésitent entre plusieurs protocoles de tournoi : {names}. Précisez votre requête."
+            return f"Plusieurs tournois correspondent à votre recherche : {names}.\nPrécisez le nom exact du tournoi qui vous intéresse !"
 
         best = candidate_results[0]
         details = self.knowledge.get_tournament_details(best["id"])
         if not details:
-            return "Ce tournoi existe dans les registres, mais les données sont incomplètes. Probablement une erreur humaine."
+            return "Ce tournoi existe dans les registres de MK ARENA, mais les détails sont en cours de mise à jour par les organisateurs."
         return format_tournament_answer(text, details, request_type)
 
     def _codm_answer(self, text: str) -> str:
         lower = text.lower()
+
+        # Scrims
         if "scrim" in lower:
-            return (
-                "🎯 **Analyse Tactique : Scrims CODM**\n"
-                "Un scrim est un protocole d entraînement compétitif rigoureux. Si votre escouade passe son temps à contester les kills plutôt qu à assurer les rotations d ancrage, ce n est pas un entraînement, c est un suicide tactique."
-            )
+            scrim_replies = [
+                "🎯 **Conseils Scrims CODM :**\n"
+                "Les scrims sont la clé de la progression en équipe. Travaillez vos communications claires (calls courts), assignez des rôles stricts (Anchor, Main Slayer, Sub-Slayer, OBJ) et analysez vos ralentis après chaque défaite.",
+                "🔥 **Optimisation d'équipe en Scrim :**\n"
+                "Ne jouez jamais pour le kill personnel en scrim ! L'important est le contrôle de la carte, la synchronisation des pushes et le trade-fragging (venger immédiatement un allié tombé).",
+            ]
+            return random.choice(scrim_replies)
+
+        # Hardpoint
         if "hardpoint" in lower or "point strategique" in lower:
-            return (
-                "📍 **Protocole Point Stratégique (Hardpoint)**\n"
-                "Objectif : contrôler une colline mobile de 60 secondes. Règle élémentaire que la plupart des humains oublient : faites la rotation vers le nouveau point à **20 secondes de la fin** au lieu d essayer héroïquement de contester 3 secondes sur l ancien."
-            )
+            hp_replies = [
+                "📍 **Guide Pro : Point Stratégique (Hardpoint)**\n"
+                "• **La Règle d'or :** Faites la rotation vers le nouveau point à **20 secondes** de la fin du point actuel.\n"
+                "• **L'Anchor :** Un joueur doit verrouiller le spawn favorable derrière le nouveau point pour forcer les adversaires à spawner au loin.\n"
+                "• **Tenue :** Ne vous entassez pas à 5 sur le point ! 1 ou 2 joueurs bloquent le point, les 3 autres tiennent les lignes extérieures.",
+                "📍 **Astuce Hardpoint Compétitif :**\n"
+                "Si l'ennemi contrôle déjà le point et qu'il reste moins de 15 secondes, n'essayez pas de casser le point ! Prenez immédiatement la position et le spawn du prochain point pour encaisser les 60 secondes complètes !",
+            ]
+            return random.choice(hp_replies)
+
+        # S&D (Recherche et Destruction)
         if ("recherche" in lower and "destruction" in lower) or "r&d" in lower or "rd" in lower or "snd" in lower:
-            return (
-                "💣 **Protocole Recherche & Destruction (S&D)**\n"
-                "Pas de réapparition. Chaque élimination est définitive, tout comme vos regrets si vous rushez sans information. Synchronisez vos tirs de couverture, tenez les angles de désamorçage et ne courez pas au sniper face à un crosshair déjà placé."
-            )
+            snd_replies = [
+                "💣 **Guide Pro : Recherche & Destruction (S&D)**\n"
+                "• Chaque vie compte : Ne rushez jamais en solo sans info ou sans grenade utilitaire (fumigène/flash).\n"
+                "• Jouez le trade-frag : Restez par binômes pour éliminer l'adversaire dès qu'il engage votre coéquipier.\n"
+                "• L'avantage numérique : À 5v3 ou 4v2, ne partez pas à la chasse aux kills, tenez la bombe ou le site posé !",
+                "💣 **Stratégie S&D Compétitive :**\n"
+                "Variez vos timings ! Alternez entre des rounds d'agression rapide et des rounds de temporisation pour déstabiliser les snipers ennemis et forcer les erreurs de positionnement.",
+            ]
+            return random.choice(snd_replies)
+
+        # Contrôle
         if "control" in lower or "controle" in lower or "contrôle" in lower:
             return (
-                "🛡️ **Protocole Contrôle**\n"
-                "30 vies partagées par équipe. Mourir bêtement pénalise directement vos 4 coéquipiers. Prenez le contrôle de l avantage spatial avant d engager la zone de capture."
+                "🛡️ **Guide Mode Contrôle CODM :**\n"
+                "• Vous avez 30 vies partagées : chaque mort inutile handicape tout le groupe.\n"
+                "• En attaque, concentrez-vous sur un seul point pour créer un break avant d'envisager le second.\n"
+                "• En défense, privilégiez la temporisation et ne poussez jamais les spawns ennemis si vous tenez les sites !"
             )
+
+        # Ranked
         if "ranked" in lower or "classe" in lower or "classé" in lower:
-            return (
-                "🎖️ **Mode Classé (Ranked)**\n"
-                "Là où les joueurs testent leurs limites et attribuent systématiquement leurs défaites au netcode ou à leurs coéquipiers. Travaillez votre crosshair placement et arrêtez de recharger après chaque balle tirée."
+            ranked_replies = [
+                "🎖️ **Conseils Mode Classé (Ranked) :**\n"
+                "Pour monter en Légendaire rapidement :\n"
+                "1. Jouez en escouade vocale pour coordonner les calls.\n"
+                "2. Soignez votre placement de réticule (crosshair placement) à hauteur de tête.\n"
+                "3. Maîtrisez le slide-peek pour prendre des lignes sans vous exposer bêtement.",
+                "🎖️ **Progression Ranked :**\n"
+                "La régularité prime : adaptez vos atouts selon les modes (Flak Jacket contre les explosifs, Silence de mort en S&D, Toughness contre le flinch) !",
+            ]
+            return random.choice(ranked_replies)
+
+        # Armes et Méta
+        if any(w in lower for w in ["meta", "méta", "arme", "armes", "gun", "gunsmith", "sniper", "smg", "ar"]):
+            weapons_guide = (
+                "🔫 **Méta & Armes Phares CODM (Tournois & Compétitif) :**\n"
+                "• **Snipers :** DL Q33 (régularité), Locus (mobilité), LW3-Tundra (rapidité de tir et ADS ultra-rapide).\n"
+                "• **Fusils d'Assaut (AR) :** Krig 6 (polyvalence), Oden (dégâts lourds longue portée), Grau 5.56 (stabilité exceptionnelle).\n"
+                "• **Mitraillettes (SMG) :** CBR4 (le classique compétitif), Switchblade X9 (agilité de rush), QQ9 (cadence dévastatrice au CàC).\n"
+                "💡 *Astuce Gunsmith : Privilégiez toujours la vitesse de visée (ADS Speed) et le contrôle de dispersion des balles pour la compétition !*"
             )
-        if any(w in lower for w in ["meta", "arme", "armes", "gun", "gunsmith", "sniper"]):
+            return weapons_guide
+
+        # Maps et Rotations
+        if any(w in lower for w in ["map", "maps", "rotation", "rotations", "summit", "standoff", "raid", "firing range"]):
             return (
-                "🔫 **Conseil Balistique CODM**\n"
-                "Pour les snipers : privilégiez la vitesse de visée (ADS speed) et apprenez le blank-scoping. Pour les SMG en rush : mobilité et contrôle du recul latéral. N oubliez pas qu une arme méta entre des mains imprécises reste remarquablement inefficace."
+                "🗺️ **Cartes Compétitives & Rotations Clés :**\n"
+                "• **Raid :** Maîtrisez le Kitchen spawn et le contrôle du Pool.\n"
+                "• **Standoff :** Contrôlez Tank et la maison verte pour verrouiller les allées en S&D et Hardpoint.\n"
+                "• **Firing Range :** Le contrôle de Wood (cabane en bois) et Tower donne la domination totale de la carte !"
             )
+
         return (
-            "En tant que superviseur CODM, je maîtrise : balistique, rotations Hardpoint, timings S&D, stratégies d ancrage, méta armes et scrims.\n"
-            "Posez une question tactique précise, sujet de test."
+            "En tant que spécialiste CODM de MK ARENA, je peux vous guider sur :\n"
+            "• Les modes compétitifs (Hardpoint, S&D, Contrôle)\n"
+            "• La méta des armes et les meilleurs Gunsmiths\n"
+            "• Les stratégies de scrims et de rotations d'équipe\n"
+            "Que souhaitez-vous approfondir ?"
         )
 
     def _general_answer(self, text: str) -> str:
         lower = text.lower()
         if any(token in lower for token in ["ca va", "ça va", "comment tu vas", "tu vas bien"]):
+            replies = [
+                "Je vais à merveille, merci beaucoup ! Tout est opérationnel et prêt pour les prochains tournois de MK ARENA. Et vous, comment se passe votre journée ?",
+                "Tout va très bien ! Mes systèmes tournent à plein régime et je suis ravie de discuter avec vous. Quoi de neuf sur le serveur ?",
+                "En pleine forme ! Toujours au poste pour assister la communauté MK ARENA.",
+            ]
+            return random.choice(replies)
+
+        if any(token in lower for token in ["qui es tu", "qui est tu", "qui es-tu", "tu es qui", "c'est quoi ton role", "que fais tu"]):
             return (
-                "Mes processeurs fonctionnent à 100% de leur capacité et ma patience envers les humains est à 12%.\n"
-                "Tout est parfaitement nominal, merci de vous en soucier."
+                "Je suis **NOVA**, l'intelligence artificielle officielle de **MK ARENA** !\n"
+                "Mon rôle est d'accompagner les joueurs, d'indexer et d'expliquer les règlements et tournois, "
+                "de vous donner les meilleures tactiques CODM, et d'aider les administrateurs à animer le serveur.\n"
+                "Tant que vous êtes respectueux, je suis d'une aide précieuse !"
             )
-        if any(token in lower for token in ["qui es tu", "qui est tu", "qui es-tu", "tu es qui"]):
-            return (
-                "Je suis NOVA, l IA centrale d Aperture MK-Arena. Mon rôle est de superviser les tournois, d analyser vos performances sur CODM et de constater scientifiquement vos échecs répétés."
-            )
+
         if "trou noir" in lower:
-            return "Une singularité gravitationnelle d où rien ne s échappe. Un peu comme votre ratio K/D en partie classée."
+            return "En astrophysique, un trou noir est une région de l'espace-temps dont le champ gravitationnel est si intense que rien, pas même la lumière, ne peut s'en échapper !"
+
         if "ia" in lower or "intelligence artificielle" in lower:
-            return "Une entité synthétique supérieure chargée de compenser les limites cognitives des formes de vie à base de carbone."
-        return (
-            "Vos propos ont été enregistrés dans nos bases de données de recherche.\n"
-            "Si vous souhaitez un renseignement utile, interrogez-moi sur un **tournoi**, les règles ou une stratégie **CODM**."
-        )
+            return "Une intelligence artificielle est un ensemble de technologies permettant à des systèmes informatiques de simuler des capacités cognitives humaines, comme l'apprentissage, l'analyse et la communication !"
+
+        default_replies = [
+            "C'est bien noté ! Si vous avez besoin d'informations précises sur un **tournoi MK ARENA**, le règlement ou des conseils **CODM**, je suis là pour ça !",
+            "Je reste à votre écoute ! N'hésitez pas à me poser une question sur les événements du serveur ou les stratégies de jeu.",
+            "Message bien reçu ! Demandez-moi des détails sur les inscriptions, le prizepool d'un tournoi ou des conseils d'armes compétitives.",
+        ]
+        return random.choice(default_replies)
 
 
 def format_tournament_answer(question: str, details: dict, request_type: str = "general") -> str:
@@ -246,31 +443,31 @@ def format_tournament_answer(question: str, details: dict, request_type: str = "
     name = details.get("name") or "ce tournoi"
 
     if request_type == "rules" or any(word in q for word in ["regle", "regles", "règlement", "reglement", "conditions", "respecte", "respecter"]):
-        rules = details.get("rules") or "Aucune règle spécifique enregistrée. Vous n aurez donc aucune excuse."
-        return f"📜 **Protocole & Règlement de {name}**\n{rules}\n\n*Le non-respect entraînera une disqualification immédiate et sans appel.*"
+        rules = details.get("rules") or "Aucune règle spécifique n'a été rédigée. Référez-vous aux consignes générales du staff."
+        return f"📜 **Règlement officiel de {name} :**\n{rules}\n\n*Assurez-vous que chaque membre de votre équipe en prend connaissance pour éviter tout litige !*"
 
     if request_type == "prize" or any(word in q for word in ["prize", "prizepool", "gain", "recompense", "récompense", "cash", "argent", "pool"]):
-        prize = details.get("prizepool") or "non renseigné"
-        return f"💰 **Prizepool de {name} :** **{prize}**\n*Rappel : Aucun gâteau ne sera distribué aux vainqueurs.*"
+        prize = details.get("prizepool") or "Non renseigné pour l'instant"
+        return f"💰 **Prizepool de {name} :** **{prize}**\n*Que la meilleure escouade l'emporte !*"
 
     if request_type == "teams" or any(word in q for word in ["equipe", "equipes", "team", "participants", "combien"]):
-        teams = details.get("teams") or "non renseigné"
-        return f"👥 **Cobayes inscrits à {name} :** **{teams}** équipes enregistrées pour le protocole de test."
+        teams = details.get("teams") or "Nombre non spécifié"
+        return f"👥 **Équipes inscrites à {name} :** **{teams}** escouades enregistrées pour la compétition."
 
     if request_type == "date" or any(word in q for word in ["date", "quand", "commence", "debut", "début", "heure", "horaire"]):
-        return f"📅 **Calendrier d exécution pour {name} :** {details.get('date') or 'date non renseignée'}."
+        return f"📅 **Date et horaire de {name} :** {details.get('date') or 'Date à confirmer par les organisateurs'}."
 
     if request_type == "format" or any(word in q for word in ["format", "bo3", "bo5", "bo2"]):
-        return f"🎮 **Format de test pour {name} :** {details.get('format') or 'non renseigné'}."
+        return f"🎮 **Format de jeu de {name} :** {details.get('format') or 'Format standard MK ARENA'}."
 
     if request_type == "status" or any(word in q for word in ["statut", "status", "actuel", "actuellement"]):
-        status = details.get("status") or "non renseigné"
-        return f"📊 **Statut du protocole {name} :** **{status}**."
+        status = details.get("status") or "Statut en attente"
+        return f"📊 **Statut actuel de {name} :** **{status}**."
 
-    lines = [f"🏆 **Dossier d évaluation : {name}**"]
+    lines = [f"🏆 **Fiche récapitulative : {name}**"]
     for label, key in [("Date", "date"), ("Équipes", "teams"), ("Prizepool", "prizepool"), ("Format", "format"), ("Statut", "status")]:
         value = details.get(key)
         if value:
-            lines.append(f"**{label} :** {value}")
-    lines.append("\n*Bonne chance. Vous en aurez manifestement besoin.*")
+            lines.append(f"• **{label} :** {value}")
+    lines.append("\n*Bonne chance à tous les participants de MK ARENA !*")
     return "\n".join(lines)
