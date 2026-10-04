@@ -182,6 +182,5 @@ def format_tournament_answer(question: str, details: dict, request_type: str = "
         value = details.get(key)
         if value:
             lines.append(f"**{label} :** {value}")
-    lines.append("
-*Bonne chance. Vous en aurez manifestement besoin.*")
+    lines.append("\n*Bonne chance. Vous en aurez manifestement besoin.*")
     return "\n".join(lines)

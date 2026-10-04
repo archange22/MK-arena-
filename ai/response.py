@@ -22,6 +22,5 @@ def format_nova_status(version: str, db, tournament_scanner, knowledge_count: in
         lines.append("📡 **Scanner tournois :** Inactif (vous m épargnez l analyse de vos défaites)")
     else:
         lines.append("📡 **Scanner tournois :** Actif (surveillance des sujets de test en cours)")
-    lines.append("
-🍰 *Rappel de sécurité : Le gâteau n est toujours pas garanti.*")
+    lines.append("\n🍰 *Rappel de sécurité : Le gâteau n est toujours pas garanti.*")
     return "\n".join(lines)
