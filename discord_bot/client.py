@@ -419,6 +419,16 @@ class NovaClient(discord.Client):
             await message.reply("Oui, sujet de test ? J'écoute.")
             return
 
+        # --- Connexion NOVA API (Site Web) ---
+        try:
+            from nova_api import ask_nova_api
+            nova_reply = await ask_nova_api(str(message.channel.id), content, message.author.display_name)
+            if nova_reply:
+                await message.reply(nova_reply)
+                return
+        except Exception as e:
+            logger.warning(f"Erreur appel NOVA API: {e}")
+
         # Commandes naturelles administrateur
         is_admin = isinstance(message.author, discord.Member) and self._is_owner_or_admin(message.author)
         lower_content = content.lower()
