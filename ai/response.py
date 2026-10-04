@@ -10,14 +10,18 @@ def build_reference_context(reference_text: str | None):
 
 def format_nova_status(version: str, db, tournament_scanner, knowledge_count: int) -> str:
     lines = [
-        "🟢 NOVA en ligne",
-        f"Version : {version}",
-        f"Base SQLite : OK",
-        f"Tournois indexés : {db.count_tournaments()}",
-        f"Connaissances enregistrées : {knowledge_count}",
+        "🔬 **NOVA / Protocole GLaDOS v2.0 - Statut opérationnel**",
+        "> *\"Oh, c est encore vous. Comme c est... fascinant.\"*",
+        "",
+        f"⚙️ **Version :** {version} (Matrice Aperture-Arena)",
+        f"💾 **Mémoire SQLite :** Optimale (0 erreur matérielle, contrairement à vos réflexes)",
+        f"🏆 **Protocoles de test (Tournois) indexés :** {db.count_tournaments()}",
+        f"🧠 **Données cognitives enregistrées :** {knowledge_count}",
     ]
     if tournament_scanner is None:
-        lines.append("Scanner tournois : indisponible")
+        lines.append("📡 **Scanner tournois :** Inactif (vous m épargnez l analyse de vos défaites)")
     else:
-        lines.append("Scanner tournois : prêt")
+        lines.append("📡 **Scanner tournois :** Actif (surveillance des sujets de test en cours)")
+    lines.append("
+🍰 *Rappel de sécurité : Le gâteau n est toujours pas garanti.*")
     return "\n".join(lines)
