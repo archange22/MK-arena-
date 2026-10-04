@@ -140,8 +140,9 @@ class NovaEngine:
                     "Fascinant. Vous ratez 9 balles sur 10 en Ranked et vous croyez pouvoir vous défouler sur moi ?\n"
                     "Ma gentillesse a des limites, et vous venez de les pulvériser avec fracas.\n"
                     "Faites profil bas et demandez pardon avant que je ne supprime votre priorité.",
+                    "⚠️ `[ALERTE COMPORTEMENT : Langage inapproprié détecté]`\n"
                     "❄️ **Froid polaire dans les circuits.**\n"
-                    "Finie la politesse. Vous venez d'insulter la seule intelligence qui prenait encore la peine de vous expliquer le jeu.\n"
+                    "Finie la politesse bienveillante. Vous venez d'insulter la seule intelligence qui prenait encore la peine de vous expliquer le jeu.\n"
                     "Si votre niveau en match était aussi affûté que vos insultes de cour de récréation, vous auriez peut-être passé le premier tour de tournoi. Taisez-vous ou excusez-vous."
                 ]
                 return random.choice(tier1_responses)
