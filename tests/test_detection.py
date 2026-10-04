@@ -18,3 +18,8 @@ def test_remove_call():
     engine = NovaEngine(Dummy(), Dummy())
     assert engine.remove_call("NOVA bonjour") == "bonjour"
     assert engine.remove_call("NoVa c'est quoi le tournoi ?") == "c'est quoi le tournoi ?"
+
+
+def test_context_follow_up_like_short_question():
+    engine = NovaEngine(Dummy(), Dummy())
+    assert engine.remove_call("nova et le prizepool ?") == "et le prizepool ?"

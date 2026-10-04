@@ -1,36 +1,17 @@
-from ai.engine import NovaEngine
+from ai.intent import detect_intent, detect_request_type, extract_tournament_hint
 
 
-class DummyContext:
-    def latest_tournament_hint(self, user_id):
-        return "MK SQUID GAME"
+def test_detect_intent_tournament():
+    assert detect_intent("nova c quoi les regle du squid game") == "tournament"
+    assert detect_intent("nova explique moi le hardpoint") == "codm"
+    assert detect_intent("nova bonjour") == "greeting"
 
 
-class DummyKnowledge:
-    def search_tournaments(self, query, guild_id):
-        return [{
-            "id": 1,
-            "name": "MK SQUID GAME",
-            "prizepool": "250 €",
-            "teams": "16",
-            "format": "BO3",
-            "rules": "Règles de base du tournoi",
-            "status": "En cours"
-        }]
-
-    def get_tournament_details(self, tournament_id):
-        return {
-            "id": 1,
-            "name": "MK SQUID GAME",
-            "prizepool": "250 €",
-            "teams": "16",
-            "format": "BO3",
-            "rules": "Règles de base du tournoi",
-            "status": "En cours"
-        }
+def test_detect_request_type():
+    assert detect_request_type("nova le prizepool du squid game") == "prize"
+    assert detect_request_type("nova donne moi les regles") == "rules"
 
 
-def test_context_hint_used_for_tournament_answers():
-    engine = NovaEngine(DummyKnowledge(), DummyContext())
-    answer = engine.respond(1, 1, "nova et le prizepool ?", reference_context="MK SQUID GAME")
-    assert "250" in answer
+def test_extract_tournament_hint():
+    assert extract_tournament_hint("nova le squid game il commence quand") == "mk squid game"
+    assert extract_tournament_hint("nova world cup") == "mk world cup"

@@ -1,6 +1,6 @@
 import re
 
-from ai.intent import detect_intent, extract_tournament_hint
+from ai.intent import detect_intent, detect_request_type, extract_tournament_hint
 
 
 class NovaEngine:
@@ -11,11 +11,11 @@ class NovaEngine:
     def is_called(self, text: str) -> bool:
         if not text:
             return False
-        return bool(re.search(r"(?<![a-zà-ÿ])nova(?![a-zà-ÿ])", text, flags=re.IGNORECASE))
+        return bool(re.search(r"(?<![a-z0-9])nova(?![a-z0-9])", text, flags=re.IGNORECASE))
 
     def remove_call(self, text: str) -> str:
         cleaned = re.sub(
-            r"(?<![a-zà-ÿ])nova(?![a-zà-ÿ])\s*[:\-]?\s*",
+            r"(?<![a-z0-9])nova(?![a-z0-9])\s*[:\-]?\s*",
             "",
             text,
             count=1,
@@ -24,97 +24,105 @@ class NovaEngine:
         return cleaned.strip()
 
     def respond(self, user_id: int, guild_id: int, text: str, reference_context: str | None = None) -> str:
-        base_text = text.strip()
-        if reference_context:
-            base_text = f"{reference_context} {base_text}".strip()
+        if self.context is not None:
+            recent_context = self.context.build_summary(user_id)
+        else:
+            recent_context = ""
 
-        if not base_text:
+        context_parts = [part for part in [recent_context, reference_context, text] if part and str(part).strip()]
+        payload = " ".join(str(part).strip() for part in context_parts)
+        if not payload:
             return "Oui ? 😎"
 
-        intent = detect_intent(base_text)
-        tournament_hint = extract_tournament_hint(base_text)
-        if not tournament_hint and self.context is not None and hasattr(self.context, "latest_tournament_hint"):
+        intent = detect_intent(payload)
+        request_type = detect_request_type(payload)
+        tournament_hint = extract_tournament_hint(payload)
+        if not tournament_hint and self.context is not None:
             tournament_hint = self.context.latest_tournament_hint(user_id)
 
         if intent == "greeting":
             return "Tranquille 😎 Je suis opérationnelle. Qu'est-ce qu'on fait ?"
         if intent == "tournament":
-            return self._tournament_answer(user_id, guild_id, base_text, tournament_hint)
+            return self._tournament_answer(user_id, guild_id, payload, tournament_hint, request_type)
         if intent == "codm":
-            return self._codm_answer(base_text)
-        return self._general_answer(base_text)
+            return self._codm_answer(payload)
+        return self._general_answer(payload)
 
-    def _tournament_answer(self, user_id: int, guild_id: int, text: str, tournament_hint: str | None):
+    def _tournament_answer(self, user_id: int, guild_id: int, text: str, tournament_hint: str | None, request_type: str):
         if self.knowledge is None:
             return "Je n'ai pas de mémoire de tournoi disponible pour le moment."
 
-        results = self.knowledge.search_tournaments(text, guild_id)
+        candidate_results = []
         if tournament_hint:
-            exact = self.knowledge.search_tournaments(tournament_hint, guild_id)
-            if exact:
-                results = exact
+            candidate_results = self.knowledge.search_tournaments(tournament_hint, guild_id)
+        if not candidate_results:
+            candidate_results = self.knowledge.search_tournaments(text, guild_id)
 
-        if not results:
+        if not candidate_results:
             return "Je n'ai pas trouvé cette information dans les données disponibles du serveur. Je préfère ne pas l'inventer."
 
-        if len(results) > 1 and not any((r["name"] or "").lower() in text.lower() for r in results):
-            names = ", ".join(r["name"] for r in results[:5])
+        if len(candidate_results) > 1 and not any((r.get("name") or "").lower() in text.lower() for r in candidate_results):
+            names = ", ".join(r["name"] for r in candidate_results[:5])
             return f"Tu parles de quel tournoi ? 👀 J'ai trouvé : {names}"
 
-        best = results[0]
+        best = candidate_results[0]
         details = self.knowledge.get_tournament_details(best["id"])
-        return format_tournament_answer(text, details)
+        if not details:
+            return "J'ai trouvé un tournoi, mais il n'y a pas encore assez d'informations pour te répondre proprement."
+        return format_tournament_answer(text, details, request_type)
 
     def _codm_answer(self, text: str) -> str:
         lower = text.lower()
         if "scrim" in lower:
-            return "Un scrim est un match d'entraînement compétitif. C'est le moment de tester un plan, une rotation ou un stratagème avant le vrai match."
+            return "Un scrim est un match d'entraînement compétitif. C'est le moment de tester une stratégie, une rotation, une composition ou une coordination d'équipe."
         if "hardpoint" in lower:
-            return "Le Hardpoint, c'est un mode où les deux équipes doivent contrôler une zone qui bouge. La rotation, le timing et l'occupation de la zone sont essentiels."
+            return "Le Hardpoint consiste à contrôler une zone qui évolue. La rotation et le contrôle des points sont essentiels."
         if ("recherche" in lower and "destruction" in lower) or "r&d" in lower or "rd" in lower:
-            return "La Recherche & Destruction est un mode objectif. Une bonne communication, le trade et le timing des entrées peuvent faire toute la différence."
-        if "control" in lower or "contrôle" in lower:
-            return "Le Contrôle consiste à prendre et défendre des zones. Le positionnement et le timing de la push sont très importants."
+            return "La Recherche & Destruction est un mode très axé sur la communication, les trades, les timings et la gestion des vies."
+        if "control" in lower or "controle" in lower or "contrôle" in lower:
+            return "Le Contrôle tourne autour des zones à prendre et à défendre. Le timing de pression et la coordination de la team sont primordiaux."
         if "ranked" in lower:
-            return "Le Ranked, c'est le mode compétitif où les performances comptent. La cohésion d'équipe, les rotations et la gestion des talents sont essentiels."
-        return "Je peux t'aider sur CODM : armes, classes, modes, scrims, stratégies, rotations, Ranked et tournois. Donne-moi un sujet précis. 🎮"
+            return "Le Ranked est le mode compétitif où les performances et la cohésion sont décisives."
+        return "Je peux t'aider sur CODM : armes, modes, scrims, rotations, stratégies, Ranked et tournois. Donne-moi un sujet précis. 🎮"
 
     def _general_answer(self, text: str) -> str:
         lower = text.lower()
         if any(token in lower for token in ["ca va", "ça va", "comment tu vas", "tu vas bien"]):
             return "Tranquille 😎 Tout est opérationnel. Et toi ?"
         if any(token in lower for token in ["qui es tu", "qui est tu", "qui es-tu", "tu es qui"]):
-            return "Je suis NOVA, l'IA de MK ARENA. Je peux discuter, répondre aux questions, retrouver les infos du serveur et aider sur les tournois et le CODM."
+            return "Je suis NOVA, l'IA de MK ARENA. Je peux discuter, répondre à des questions, chercher des infos du serveur et aider sur les tournois et sur CODM."
         if "trou noir" in lower:
             return "Un trou noir est une région de l'espace où la gravité est si intense que même la lumière ne peut plus s'échapper."
         if "ia" in lower or "intelligence artificielle" in lower:
-            return "Une IA est un système qui traite des données pour reconnaître des schémas, répondre à des questions ou aider à des tâches. Sur ce projet, je reste modulaire et localement extensible."
-        if any(token in lower for token in ["idee", "idée", "video", "vidéo", "blague", "humour"]):
-            return "D'accord, je peux t'aider. Donne-moi juste le type de contenu que tu veux : idée de vidéo, blague, ou autre sujet."
-        return "Je peux t'aider sur plusieurs sujets. Si tu veux, on peut parler des tournois, du CODM, du serveur ou d'un autre sujet."
+            return "Une IA traite des données pour reconnaître des schémas et répondre à des demandes. Ici, le projet reste modulaire et localement extensible."
+        return "Je peux t'aider sur plusieurs sujets. Si tu veux, on peut parler des tournois, du CODM, du serveur, ou d'un autre sujet."
 
 
-def format_tournament_answer(question: str, details: dict) -> str:
+def format_tournament_answer(question: str, details: dict, request_type: str = "general") -> str:
     q = (question or "").lower()
     name = details.get("name") or "ce tournoi"
 
-    if any(word in q for word in ["regle", "regles", "règlement", "reglement", "règle", "respecte", "conditions"]):
+    if request_type == "rules" or any(word in q for word in ["regle", "regles", "règlement", "reglement", "conditions", "respecte", "respecter"]):
         rules = details.get("rules") or "Aucune règle n'a encore été indexée pour ce tournoi."
         return f"📜 Règles de **{name}**\n{rules}"
 
-    if any(word in q for word in ["prize", "prizepool", "gain", "recompense", "récompense", "cash", "pool"]):
+    if request_type == "prize" or any(word in q for word in ["prize", "prizepool", "gain", "recompense", "récompense", "cash", "argent", "pool"]):
         prize = details.get("prizepool") or "non renseigné"
         return f"💰 Pour **{name}**, le prizepool indiqué est : **{prize}**."
 
-    if any(word in q for word in ["equipe", "equipes", "team", "participants", "combien"]):
+    if request_type == "teams" or any(word in q for word in ["equipe", "equipes", "team", "participants", "combien"]):
         teams = details.get("teams") or "non renseigné"
         return f"👥 **{name}** compte actuellement **{teams}** selon les informations indexées."
 
-    if any(word in q for word in ["date", "quand", "commence", "debut", "début", "heure", "horaire"]):
+    if request_type == "date" or any(word in q for word in ["date", "quand", "commence", "debut", "début", "heure", "horaire"]):
         return f"📅 **{name}** : {details.get('date') or 'date non renseignée'}."
 
-    if any(word in q for word in ["format", "bo3", "bo5", "bo2"]):
+    if request_type == "format" or any(word in q for word in ["format", "bo3", "bo5", "bo2"]):
         return f"🎮 Format de **{name}** : {details.get('format') or 'non renseigné'}."
+
+    if request_type == "status" or any(word in q for word in ["statut", "status", "actuel", "actuellement"]):
+        status = details.get("status") or "non renseigné"
+        return f"📊 Statut de **{name}** : **{status}**."
 
     lines = [f"🏆 **{name}**"]
     for label, key in [("Date", "date"), ("Équipes", "teams"), ("Prizepool", "prizepool"), ("Format", "format"), ("Statut", "status")]:

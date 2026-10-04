@@ -23,6 +23,7 @@ class Database:
                     content TEXT NOT NULL,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+
                 CREATE TABLE IF NOT EXISTS knowledge (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     guild_id INTEGER NOT NULL,
@@ -32,6 +33,7 @@ class Database:
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+
                 CREATE TABLE IF NOT EXISTS tournaments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     guild_id INTEGER NOT NULL,
@@ -46,24 +48,17 @@ class Database:
                     source_message_id INTEGER,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+
                 CREATE TABLE IF NOT EXISTS tournament_messages (
                     message_id INTEGER PRIMARY KEY,
                     channel_id INTEGER NOT NULL,
                     content TEXT NOT NULL,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
-                CREATE TABLE IF NOT EXISTS tournament_data (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    guild_id INTEGER NOT NULL,
-                    tournament_id INTEGER NOT NULL,
-                    field TEXT NOT NULL,
-                    value TEXT,
-                    UNIQUE(guild_id, tournament_id, field)
-                );
+
                 CREATE INDEX IF NOT EXISTS idx_knowledge_guild ON knowledge(guild_id);
                 CREATE INDEX IF NOT EXISTS idx_tournaments_guild ON tournaments(guild_id);
                 CREATE INDEX IF NOT EXISTS idx_tournaments_name ON tournaments(name);
-                CREATE INDEX IF NOT EXISTS idx_tournament_data ON tournament_data(guild_id, tournament_id, field);
                 """
             )
 

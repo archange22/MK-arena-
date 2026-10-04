@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 
 import discord
@@ -23,7 +25,7 @@ class NovaClient(discord.Client):
         self.settings = settings
         self.db = db
         self.tree = app_commands.CommandTree(self)
-        self.context = ConversationMemory(db, settings.context_ttl_minutes, settings.max_context_messages)
+        self.context = ConversationMemory(db, settings.context_ttl_minutes, getattr(settings, "max_context_messages", 20))
         self.knowledge = KnowledgeManager(db)
         self.engine = NovaEngine(self.knowledge, self.context)
         self.tournament_scanner = None
@@ -41,7 +43,7 @@ class NovaClient(discord.Client):
                 return
             await interaction.response.send_message(
                 format_nova_status(
-                    "0.1.3",
+                    "0.3",
                     self.db,
                     self.tournament_scanner,
                     self.db.count_knowledge(),
@@ -91,8 +93,8 @@ class NovaClient(discord.Client):
         if message.reference and message.reference.resolved and isinstance(message.reference.resolved, discord.Message):
             reference_context = message.reference.resolved.content
 
-        staff_instruction = content.strip().startswith('"') and content.strip().endswith('"')
-        if staff_instruction:
+        quoted_staff = content.strip().startswith('"') and content.strip().endswith('"')
+        if quoted_staff:
             if not isinstance(message.author, discord.Member) or not can_manage_nova(message.author):
                 await message.reply("Je peux discuter avec toi, mais tu n'as pas la permission de modifier mes connaissances.")
                 return

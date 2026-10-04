@@ -2,75 +2,100 @@ import re
 import unicodedata
 
 
+TOURNAMENT_ALIASES = {
+    "mk squid game": "mk squid game",
+    "squid game": "mk squid game",
+    "mk world cup": "mk world cup",
+    "world cup": "mk world cup",
+    "mk champion league": "mk champion league",
+    "champion league": "mk champion league",
+    "squid": "mk squid game",
+}
+
+
 def normalize_text(text: str) -> str:
     if not text:
         return ""
-    normalized = unicodedata.normalize("NFKC", text).lower()
-    normalized = normalized.replace("’", "'").replace("“", '"').replace("”", '"')
-    replacements = {
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", "ignore").decode("ascii")
+    text = text.lower()
+    text = text.replace("’", "'").replace("“", '"').replace("”", '"')
+    for source, target in {
         "ça": "ca",
         "c'est": "c est",
         "qu'est": "quest",
-        "n'": " ",
+        "j'ai": "jai",
         "d'": " ",
         "l'": " ",
-        "j'ai": "jai",
-        "j ai": "jai",
-    }
-    for src, dst in replacements.items():
-        normalized = normalized.replace(src, dst)
-    normalized = re.sub(r"[^a-z0-9\s\-]", " ", normalized)
-    normalized = re.sub(r"\s+", " ", normalized).strip()
-    return normalized
+        "n'": " ",
+    }.items():
+        text = text.replace(source, target)
+    text = re.sub(r"[^a-z0-9\s\-]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 
 def detect_intent(text: str) -> str:
-    t = normalize_text(text)
-    if not t:
+    cleaned = normalize_text(text)
+    if not cleaned:
         return "general"
 
     greeting_markers = [
-        "bonjour", "salut", "hello", "yo", "ca va", "cava", "comment tu vas",
-        "tu es la", "on va", "wsh"
+        "bonjour", "salut", "hello", "yo", "ca va", "cava",
+        "comment tu vas", "tu es la", "wsh", "bienvenue"
     ]
-    if any(marker in t for marker in greeting_markers):
+    if any(marker in cleaned for marker in greeting_markers):
         return "greeting"
 
     tournament_markers = [
         "tournoi", "tournois", "squid", "world cup", "champion league",
-        "regle", "reglement", "regles", "participer", "inscription",
-        "prizepool", "prize", "equipe", "equipes", "format", "statut",
-        "date", "quand commence", "comment fonctionne", "conditions", "scrim",
-        "team"
+        "regle", "regles", "reglement", "règlement", "participer", "inscription",
+        "prizepool", "prize", "equipe", "equipes", "team", "format", "date",
+        "quand commence", "conditions", "comment fonctionne", "les regles",
+        "on doit faire quoi", "c quoi les regles", "tournoi squid"
     ]
-    if any(marker in t for marker in tournament_markers):
+    if any(marker in cleaned for marker in tournament_markers):
         return "tournament"
 
     codm_markers = [
         "codm", "call of duty mobile", "hardpoint", "recherche et destruction",
-        "r and d", "rd", "ranked", "control", "battle royale", "scrim",
-        "rotations", "aim", "classe", "arme", "loadout", "mode de jeu",
-        "recherche destruction"
+        "r and d", "rd", "ranked", "control", "contrôle", "battle royale",
+        "scrim", "rotation", "rotations", "arme", "loadout", "classe", "aim"
     ]
-    if any(marker in t for marker in codm_markers):
+    if any(marker in cleaned for marker in codm_markers):
         return "codm"
 
     return "general"
 
 
+def detect_request_type(text: str) -> str:
+    cleaned = normalize_text(text)
+    if not cleaned:
+        return "general"
+
+    for key, markers in {
+        "rules": ["regle", "regles", "reglement", "conditions", "respecte", "on doit faire quoi"],
+        "teams": ["equipes", "equipe", "participants", "combien de equipes"],
+        "prize": ["prizepool", "prize", "recompense", "gain", "cash", "argent"],
+        "date": ["date", "quand", "commence", "debut", "heure", "horaire"],
+        "format": ["format", "bo3", "bo5", "bo2"],
+        "status": ["statut", "status", "en cours", "actuel", "actuellement"],
+    }.items():
+        if any(marker in cleaned for marker in markers):
+            return key
+    return "general"
+
+
 def extract_tournament_hint(text: str) -> str | None:
-    t = normalize_text(text)
-    candidates = [
-        "mk squid game",
-        "squid game",
-        "mk world cup",
-        "world cup",
-        "mk champion league",
-        "champion league",
-        "squid",
-        "mk arena",
-    ]
-    for candidate in candidates:
-        if candidate in t:
-            return candidate.title()
+    cleaned = normalize_text(text)
+    if not cleaned:
+        return None
+
+    for alias, canonical in TOURNAMENT_ALIASES.items():
+        if alias in cleaned:
+            return canonical
+
+    if "squid" in cleaned:
+        return "mk squid game"
+
     return None
