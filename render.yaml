@@ -1,11 +1,9 @@
 services:
   - type: web
-    name: nova-mk-arena
+    name: chacha-live
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: python3 main.py
     envVars:
-      - key: DATABASE_PATH
-        value: nova.db
       - key: DISCORD_TOKEN
         sync: false

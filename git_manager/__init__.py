@@ -1,1 +1,0 @@
-"""NOVA Git Manager subsystem"""
