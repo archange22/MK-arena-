@@ -15,6 +15,7 @@ from discord import app_commands
 from ai.engine import NovaEngine
 from ai.response import format_nova_status
 from config.permissions import can_manage_nova
+from features.config_menu import ConfigView
 from memory.conversation import ConversationMemory
 from memory.database import Database
 from memory.knowledge import KnowledgeManager
@@ -79,9 +80,22 @@ class NovaClient(discord.Client):
         await self.tree.sync()
 
     def _is_owner_or_admin(self, member: discord.Member) -> bool:
-        return member.guild.owner_id == member.id or member.guild_permissions.administrator
+        return can_manage_nova(member)
 
     def _register_commands(self):
+
+        @self.tree.error
+        async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+            logger.error("Erreur commande %s: %s", getattr(interaction.command, "name", "inconnue"), error)
+            msg = f"❌ Erreur lors de l'exécution : {error}"
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send(msg, ephemeral=True)
+                else:
+                    await interaction.response.send_message(msg, ephemeral=True)
+            except Exception:
+                pass
+
         # --- COMMANDES GENERALES ---
         @self.tree.command(name="ping", description="Vérifier la latence du bot.")
         async def ping_cmd(interaction: discord.Interaction):
@@ -328,8 +342,9 @@ class NovaClient(discord.Client):
         @self.tree.command(name="setup-tickets", description="Envoyer le panel d'ouverture de tickets interactif.")
         async def setup_tickets_cmd(interaction: discord.Interaction):
             if not isinstance(interaction.user, discord.Member) or not self._is_owner_or_admin(interaction.user):
-                await interaction.response.send_message("Permission refusée.", ephemeral=True)
+                await interaction.response.send_message("Permission refusée (nécessite Administrateur, Gérer le serveur ou Gérer les rôles).", ephemeral=True)
                 return
+            await interaction.response.defer(ephemeral=True)
             embed = discord.Embed(
                 title="📩 Centre d'Assistance • MK ARENA",
                 description="Cliquez sur le bouton ci-dessous pour ouvrir un ticket privé avec le staff.\n\n*Pour réclamation tournoi, question scrims ou support général.*",
@@ -337,7 +352,21 @@ class NovaClient(discord.Client):
             )
             embed.set_footer(text="Système de tickets Aperture / MK Arena")
             await interaction.channel.send(embed=embed, view=TicketLaunchView(self.tickets))
-            await interaction.response.send_message("✅ Panel de tickets envoyé avec succès.", ephemeral=True)
+            await interaction.followup.send("✅ Panel de tickets envoyé avec succès.", ephemeral=True)
+
+        @self.tree.command(name="config", description="Ouvrir le menu de configuration complet style DraftBot.")
+        async def config_cmd(interaction: discord.Interaction):
+            if not isinstance(interaction.user, discord.Member) or not self._is_owner_or_admin(interaction.user):
+                await interaction.response.send_message("Permission refusée (nécessite Administrateur, Gérer le serveur ou Gérer les rôles).", ephemeral=True)
+                return
+            embed = discord.Embed(
+                title="⚙️ Configuration",
+                description="Bienvenue dans la commande de configuration de **Chacha live / NOVA**.\n\nSélectionnez une catégorie ci-dessous pour afficher ou modifier les paramètres du serveur.",
+                color=0x5865F2
+            )
+            view = ConfigView(self.db, interaction.guild_id or 0)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
 
         @self.tree.command(name="ticket-close", description="Fermer le ticket actuel.")
         async def ticket_close(interaction: discord.Interaction):
