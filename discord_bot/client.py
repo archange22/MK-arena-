@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from systems.economy import EconomySystem
+from systems.drafts import DraftSystem
+from systems.giveaways import GiveawaySystem
+from systems.polls import PollSystem
+from systems.suggestions import SuggestionSystem
+import time
+
 import logging
 from datetime import timedelta
 import discord
@@ -59,6 +66,12 @@ class NovaClient(discord.Client):
         self.leveling = LevelingManager(db)
         self.tickets = TicketManager()
         self.tournament_scanner = None
+        self.economy = EconomySystem(db)
+        self.drafts = DraftSystem(db)
+        self.giveaways = GiveawaySystem(db)
+        self.polls = PollSystem(db)
+        self.suggestions = SuggestionSystem(db)
+        self.start_time = time.time()
 
     async def setup_hook(self):
         self._register_commands()
@@ -69,6 +82,201 @@ class NovaClient(discord.Client):
         return member.guild.owner_id == member.id or member.guild_permissions.administrator
 
     def _register_commands(self):
+        # --- COMMANDES GENERALES ---
+        @self.tree.command(name="ping", description="Vérifier la latence du bot.")
+        async def ping_cmd(interaction: discord.Interaction):
+            latency = round(self.latency * 1000)
+            await interaction.response.send_message(f"🏓 Pong ! Latence API : **{latency}ms**.")
+
+        @self.tree.command(name="uptime", description="Afficher le temps de fonctionnement du bot.")
+        async def uptime_cmd(interaction: discord.Interaction):
+            uptime_sec = int(time.time() - getattr(self, "start_time", time.time()))
+            hours, rem = divmod(uptime_sec, 3600)
+            mins, secs = divmod(rem, 60)
+            await interaction.response.send_message(f"⏱️ NOVA est en ligne depuis : **{hours}h {mins}m {secs}s**.")
+
+        @self.tree.command(name="botinfo", description="Informations et statistiques sur NOVA.")
+        async def botinfo_cmd(interaction: discord.Interaction):
+            embed = discord.Embed(
+                title="🤖 NOVA v3 • MK ARENA x DraftBot Edition",
+                description="Bot officiel Aperture MK Arena : Drafts CODM, Tournois, Modération & Économie.",
+                color=0x10b981
+            )
+            embed.add_field(name="Serveurs", value=str(len(self.guilds)), inline=True)
+            embed.add_field(name="Latence", value=f"{round(self.latency * 1000)}ms", inline=True)
+            embed.add_field(name="Architecture", value="Modulaire v3 • Python 3.11+", inline=True)
+            await interaction.response.send_message(embed=embed)
+
+        # --- ECONOMIE DRAFTBOT ---
+        @self.tree.command(name="balance", description="Consulter votre solde de crédits Aperture.")
+        async def balance_cmd(interaction: discord.Interaction, membre: discord.Member = None):
+            target = membre or interaction.user
+            acc = self.economy.get_account(interaction.guild_id, target.id)
+            embed = discord.Embed(
+                title=f"💳 Portefeuille de {target.display_name}",
+                color=0xf59e0b
+            )
+            embed.add_field(name="Portefeuille", value=f"{acc['wallet']} 🪙", inline=True)
+            embed.add_field(name="Banque", value=f"{acc['bank']} 🪙", inline=True)
+            embed.add_field(name="Total", value=f"{acc['wallet'] + acc['bank']} 🪙", inline=True)
+            await interaction.response.send_message(embed=embed)
+
+        @self.tree.command(name="daily", description="Récupérer votre récompense quotidienne (250 crédits).")
+        async def daily_cmd(interaction: discord.Interaction):
+            ok, msg, _ = self.economy.claim_daily(interaction.guild_id, interaction.user.id)
+            await interaction.response.send_message(msg, ephemeral=not ok)
+
+        @self.tree.command(name="weekly", description="Récupérer votre prime hebdomadaire (1500 crédits).")
+        async def weekly_cmd(interaction: discord.Interaction):
+            ok, msg, _ = self.economy.claim_weekly(interaction.guild_id, interaction.user.id)
+            await interaction.response.send_message(msg, ephemeral=not ok)
+
+        @self.tree.command(name="work", description="Travailler pour gagner des crédits.")
+        async def work_cmd(interaction: discord.Interaction):
+            ok, msg, _ = self.economy.work(interaction.guild_id, interaction.user.id)
+            await interaction.response.send_message(msg, ephemeral=not ok)
+
+        @self.tree.command(name="pay", description="Transférer des crédits à un autre membre.")
+        @app_commands.describe(membre="Bénéficiaire", montant="Montant à envoyer")
+        async def pay_cmd(interaction: discord.Interaction, membre: discord.Member, montant: int):
+            if membre.id == interaction.user.id:
+                await interaction.response.send_message("Vous ne pouvez pas vous transférer de l'argent à vous-même.", ephemeral=True)
+                return
+            ok, msg = self.economy.transfer(interaction.guild_id, interaction.user.id, membre.id, montant)
+            await interaction.response.send_message(msg, ephemeral=not ok)
+
+        @self.tree.command(name="richest", description="Classement des membres les plus riches.")
+        async def richest_cmd(interaction: discord.Interaction):
+            lb = self.economy.get_leaderboard(interaction.guild_id)
+            if not lb:
+                await interaction.response.send_message("Aucun compte économique enregistré.", ephemeral=True)
+                return
+            embed = discord.Embed(title="💰 Top 10 • Les plus fortunés de MK ARENA", color=0xf59e0b)
+            for idx, r in enumerate(lb, start=1):
+                m = interaction.guild.get_member(r['user_id'])
+                name = m.display_name if m else f"Membre ({r['user_id']})"
+                embed.add_field(name=f"#{idx} {name}", value=f"**{r['total']} 🪙** (Cash: {r['wallet']} | Banque: {r['bank']})", inline=False)
+            await interaction.response.send_message(embed=embed)
+
+        # --- DRAFTS & COMPETITION ESPORT ---
+        @self.tree.command(name="draft-create", description="Créer une session de Draft compétitive.")
+        @app_commands.describe(capitaine1="Premier capitaine", capitaine2="Deuxième capitaine", format="Format du match")
+        @app_commands.choices(format=[
+            app_commands.Choice(name="BO1", value="BO1"),
+            app_commands.Choice(name="BO3", value="BO3"),
+            app_commands.Choice(name="BO5", value="BO5"),
+        ])
+        async def draft_create_cmd(interaction: discord.Interaction, capitaine1: discord.Member, capitaine2: discord.Member, format: app_commands.Choice[str]):
+            if not isinstance(interaction.user, discord.Member) or not can_manage_nova(interaction.user):
+                await interaction.response.send_message("Réservé au staff et organisateurs.", ephemeral=True)
+                return
+            draft_id = self.drafts.create_draft(interaction.guild_id, capitaine1.id, capitaine2.id, bo_type=format.value)
+            desc = (
+                f"**Format :** {format.value}\n"
+                f"**Capitaine 1 :** {capitaine1.mention}\n"
+                f"**Capitaine 2 :** {capitaine2.mention}\n\n"
+                f"👉 Les joueurs peuvent taper `/draft-join {draft_id}` pour entrer dans la pool !"
+            )
+            embed = discord.Embed(title=f"🎮 Session de Draft #{draft_id} Initiée !", description=desc, color=0x10b981)
+            await interaction.response.send_message(embed=embed)
+
+        @self.tree.command(name="draft-join", description="Rejoindre la pool de sélection d'un draft.")
+        @app_commands.describe(draft_id="Identifiant du draft")
+        async def draft_join_cmd(interaction: discord.Interaction, draft_id: int):
+            ok, msg = self.drafts.join_pool(draft_id, interaction.user.id)
+            await interaction.response.send_message(msg, ephemeral=not ok)
+
+        @self.tree.command(name="draft-pick", description="Capitaine : choisir un joueur dans la pool.")
+        @app_commands.describe(draft_id="Identifiant du draft", joueur="Joueur sélectionné")
+        async def draft_pick_cmd(interaction: discord.Interaction, draft_id: int, joueur: discord.Member):
+            ok, msg = self.drafts.pick_player(draft_id, interaction.user.id, joueur.id)
+            await interaction.response.send_message(msg, ephemeral=not ok)
+
+        @self.tree.command(name="draft-ban", description="Capitaine : bannir une map ou arme pour le match.")
+        @app_commands.describe(draft_id="Identifiant du draft", element="Nom de la map ou arme à bannir")
+        async def draft_ban_cmd(interaction: discord.Interaction, draft_id: int, element: str):
+            ok, msg = self.drafts.ban_element(draft_id, interaction.user.id, element)
+            await interaction.response.send_message(msg, ephemeral=not ok)
+
+        @self.tree.command(name="draft-status", description="Voir le statut et les équipes d'un draft.")
+        @app_commands.describe(draft_id="Identifiant du draft")
+        async def draft_status_cmd(interaction: discord.Interaction, draft_id: int):
+            d = self.drafts.get_draft(draft_id)
+            if not d:
+                await interaction.response.send_message("Draft introuvable.", ephemeral=True)
+                return
+            embed = discord.Embed(title=f"📋 Statut Draft #{draft_id} ({d['state'].upper()})", color=0x3b82f6)
+            embed.add_field(name="Format", value=d['bo_type'], inline=True)
+            embed.add_field(name="Capitaine 1", value=f"<@{d['captain1_id']}>", inline=True)
+            embed.add_field(name="Capitaine 2", value=f"<@{d['captain2_id']}>", inline=True)
+            t1_names = ", ".join(f"<@{u}>" for u in d['team1']) or "Aucun joueur"
+            t2_names = ", ".join(f"<@{u}>" for u in d['team2']) or "Aucun joueur"
+            embed.add_field(name="Équipe 1", value=t1_names, inline=False)
+            embed.add_field(name="Équipe 2", value=t2_names, inline=False)
+            pool_names = ", ".join(f"<@{u}>" for u in d['pool']) or "Pool vide"
+            embed.add_field(name="Pool restante", value=pool_names, inline=False)
+            bans_str = ", ".join(f"{b['element']}" for b in d['bans']) or "Aucun ban"
+            embed.add_field(name="Bans actifs", value=bans_str, inline=False)
+            await interaction.response.send_message(embed=embed)
+
+        # --- GIVEAWAYS ---
+        @self.tree.command(name="giveaway-start", description="Lancer un tirage au sort Giveaway.")
+        @app_commands.describe(lot="Lot à gagner", gagnants="Nombre de gagnants", minutes="Durée en minutes")
+        async def giveaway_start_cmd(interaction: discord.Interaction, lot: str, gagnants: int = 1, minutes: int = 60):
+            if not isinstance(interaction.user, discord.Member) or not self._is_owner_or_admin(interaction.user):
+                await interaction.response.send_message("Réservé aux administrateurs.", ephemeral=True)
+                return
+            gid = self.giveaways.start_giveaway(interaction.guild_id, interaction.channel_id, lot, gagnants, minutes * 60)
+            desc = (
+                f"**Lot :** {lot}\n"
+                f"**Nombre de gagnant(s) :** {gagnants}\n"
+                f"**Durée :** {minutes} minute(s)\n\n"
+                f"Participez avec `/giveaway-enter {gid}` !"
+            )
+            embed = discord.Embed(title="🎉 NOUVEAU GIVEAWAY !", description=desc, color=0xef4444)
+            await interaction.channel.send(embed=embed)
+            await interaction.response.send_message(f"✅ Giveaway #{gid} lancé.", ephemeral=True)
+
+        @self.tree.command(name="giveaway-enter", description="Participer à un giveaway en cours.")
+        @app_commands.describe(giveaway_id="ID du giveaway")
+        async def giveaway_enter_cmd(interaction: discord.Interaction, giveaway_id: int):
+            ok, msg = self.giveaways.enter_giveaway(giveaway_id, interaction.user.id)
+            await interaction.response.send_message(msg, ephemeral=not ok)
+
+        # --- SONDAGES ---
+        @self.tree.command(name="poll", description="Créer un sondage interactif pour la communauté.")
+        @app_commands.describe(question="Question posée", option1="Choix 1", option2="Choix 2", option3="Choix 3 (optionnel)")
+        async def poll_cmd(interaction: discord.Interaction, question: str, option1: str, option2: str, option3: str = None):
+            options = [option1, option2]
+            if option3:
+                options.append(option3)
+            pid = self.polls.create_poll(interaction.guild_id, question, options)
+            opts_lines = "\n".join(f"• Option {idx+1} : **{opt}** (`/poll-vote {pid} {idx+1}`)" for idx, opt in enumerate(options))
+            embed = discord.Embed(
+                title=f"📊 Sondage #{pid} : {question}",
+                description=f"Exprimez votre vote :\n{opts_lines}",
+                color=0x3b82f6
+            )
+            await interaction.channel.send(embed=embed)
+            await interaction.response.send_message("✅ Sondage publié.", ephemeral=True)
+
+        @self.tree.command(name="poll-vote", description="Voter dans un sondage.")
+        @app_commands.describe(poll_id="ID du sondage", choix="Numéro de votre choix (1, 2, 3...)")
+        async def poll_vote_cmd(interaction: discord.Interaction, poll_id: int, choix: int):
+            ok, msg = self.polls.vote(poll_id, interaction.user.id, choix - 1)
+            await interaction.response.send_message(msg, ephemeral=not ok)
+
+        # --- SUGGESTIONS ---
+        @self.tree.command(name="suggest", description="Soumettre une suggestion pour MK ARENA.")
+        @app_commands.describe(proposition="Votre idée ou proposition")
+        async def suggest_cmd(interaction: discord.Interaction, proposition: str):
+            sid = self.suggestions.add_suggestion(interaction.guild_id, interaction.user.id, proposition)
+            embed = discord.Embed(title=f"💡 Suggestion #{sid}", description=proposition, color=0x10b981)
+            embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+            embed.set_footer(text="Votez avec /suggest-vote [id] [pour/contre]")
+            await interaction.channel.send(embed=embed)
+            await interaction.response.send_message("✅ Votre suggestion a été transmise.", ephemeral=True)
+
         # 1. Panel Web Admin
         @self.tree.command(name="panel", description="Accéder au panel d'administration Web de NOVA (Style DraftBot).")
         async def panel_cmd(interaction: discord.Interaction):

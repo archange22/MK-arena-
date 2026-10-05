@@ -149,6 +149,68 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_levels_guild_xp ON user_levels(guild_id, xp DESC);
                 CREATE INDEX IF NOT EXISTS idx_triggers_guild ON custom_triggers(guild_id);
                 CREATE INDEX IF NOT EXISTS idx_triggers_text ON custom_triggers(guild_id, trigger_text);
+
+                -- Table Economie (Wallet, Banque, Daily, Weekly, Work)
+                CREATE TABLE IF NOT EXISTS economy (
+                    guild_id INTEGER,
+                    user_id INTEGER,
+                    wallet INTEGER DEFAULT 100,
+                    bank INTEGER DEFAULT 0,
+                    last_daily INTEGER DEFAULT 0,
+                    last_weekly INTEGER DEFAULT 0,
+                    last_work INTEGER DEFAULT 0,
+                    PRIMARY KEY (guild_id, user_id)
+                );
+
+                -- Table Drafts Compétitifs (Capitaines, Pool, Teams, Bans Maps/Armes)
+                CREATE TABLE IF NOT EXISTS competitive_drafts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id INTEGER,
+                    captain1_id INTEGER,
+                    captain2_id INTEGER,
+                    bo_type TEXT DEFAULT 'BO3',
+                    state TEXT DEFAULT 'recruiting',
+                    pool_json TEXT,
+                    team1_json TEXT,
+                    team2_json TEXT,
+                    bans_json TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Table Giveaways (Lots, Gagnants, Tirage)
+                CREATE TABLE IF NOT EXISTS giveaways (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id INTEGER,
+                    channel_id INTEGER,
+                    prize TEXT,
+                    winners_count INTEGER DEFAULT 1,
+                    end_time INTEGER,
+                    status TEXT DEFAULT 'active',
+                    entries_json TEXT
+                );
+
+                -- Table Sondages (Polls interactifs)
+                CREATE TABLE IF NOT EXISTS polls (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id INTEGER,
+                    question TEXT,
+                    options_json TEXT,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                -- Table Suggestions (Idées et votes communautaires)
+                CREATE TABLE IF NOT EXISTS suggestions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id INTEGER,
+                    user_id INTEGER,
+                    content TEXT,
+                    status TEXT DEFAULT 'pending',
+                    upvotes INTEGER DEFAULT 0,
+                    downvotes INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
                 """
             )
             conn.commit()
