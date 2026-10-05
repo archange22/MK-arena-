@@ -6,7 +6,7 @@ from coding.generator import CodeGenerator
 from coding.sandbox import Sandbox
 
 def test_analyzer_scan():
-    analyzer = CodeAnalyzer('/tmp/MK-arena-')
+    analyzer = CodeAnalyzer(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     scan = analyzer.scan_directory()
     assert scan["total_python_files"] > 10
     assert any("ai.engine" in m for m in scan["modules"])
@@ -18,7 +18,7 @@ def test_code_generator():
     assert "return score + bonus" in fn
 
 def test_editor_and_rollback():
-    editor = CodeEditor('/tmp/MK-arena-')
+    editor = CodeEditor(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     test_file = "features/temp_test.py"
     success, msg = editor.write_file(test_file, "# initial content\ndef initial(): pass\n")
     assert success is True
@@ -31,7 +31,7 @@ def test_editor_and_rollback():
     rb_ok, _ = editor.rollback(test_file)
     assert rb_ok is True
 
-    full_path = os.path.join('/tmp/MK-arena-', test_file)
+    full_path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')), test_file)
     with open(full_path) as f:
         content = f.read()
     assert "pass" in content
