@@ -1,3 +1,4 @@
+import re
 import logging
 import discord
 from discord.ext import commands
@@ -6,6 +7,50 @@ from bot.permissions import is_authorized
 
 logger = logging.getLogger("cogs.tickets")
 
+INSCRIPTION_TEMPLATE = """# 🎮 INSCRIPTION DE L’ÉQUIPE
+
+**Nom de la team :**
+**Capitaine :**
+
+## 👥 Joueurs titulaires
+
+**1️⃣ Joueur 1**
+> Discord :
+> IGN :
+> UID :
+
+**2️⃣ Joueur 2**
+> Discord :
+> IGN :
+> UID :
+
+**3️⃣ Joueur 3**
+> Discord :
+> IGN :
+> UID :
+
+**4️⃣ Joueur 4**
+> Discord :
+> IGN :
+> UID :
+
+**5️⃣ Joueur 5**
+> Discord :
+> IGN :
+> UID :
+
+## 🔄 Remplaçants
+
+**6️⃣ Remplaçant 1**
+> Discord :
+> IGN :
+> UID :
+
+**7️⃣ Remplaçant 2**
+> Discord :
+> IGN :
+> UID :"""
+
 TICKET_TYPES = {
     "inscription": {
         "label": "Inscription Tournoi",
@@ -13,15 +58,7 @@ TICKET_TYPES = {
         "description": "Inscrire une équipe ou un joueur à un tournoi CODM",
         "channel_prefix": "tournoi",
         "title": "🏆 Inscription Tournoi MK ARENA",
-        "instructions": (
-            "Bienvenue dans votre salon d'inscription !\n\n"
-            "Merci de fournir les détails suivants :\n"
-            "• **Nom de l'équipe / du joueur**\n"
-            "• **Capitaine & Tag Discord**\n"
-            "• **Line-up (pseudos & IDs CODM)**\n"
-            "• **Numéro / nom du tournoi**\n\n"
-            "Un responsable esport validera votre inscription sous peu."
-        )
+        "is_tournament": True
     },
     "staff": {
         "label": "Recrutement Staff",
@@ -77,8 +114,10 @@ class TicketControlView(discord.ui.View):
         try:
             if isinstance(interaction.channel, discord.TextChannel):
                 await interaction.channel.delete(reason=f"Ticket fermé par {interaction.user}")
+        except discord.Forbidden:
+            await interaction.followup.send("❌ Erreur : Le bot n'a pas la permission de supprimer ce salon (Permission 'Gérer les salons' requise).", ephemeral=True)
         except Exception as e:
-            logger.error("Erreur lors de la suppression du salon ticket: %s", e)
+            logger.error("Erreur suppression salon: %s", e)
             await interaction.followup.send(f"❌ Impossible de supprimer le salon : {e}", ephemeral=True)
 
 class TicketSelect(discord.ui.Select):
@@ -112,11 +151,13 @@ class TicketSelect(discord.ui.Select):
             await interaction.response.send_message("❌ Cette action doit être effectuée sur un serveur.", ephemeral=True)
             return
 
-        # Vérifier si l'utilisateur a déjà un salon ticket ouvert de ce type
+        # Sanitize nom du salon (minuscules, chiffres, tirets uniquement)
+        raw_name = getattr(interaction.user, "name", "user").lower()
+        clean_name = re.sub(r"[^a-z0-9]", "", raw_name)[:12] or str(interaction.user.id)[:8]
         prefix = cfg["channel_prefix"]
-        user_clean_name = interaction.user.name.lower().replace(" ", "-")[:12]
-        expected_channel_name = f"{prefix}-{user_clean_name}"
+        expected_channel_name = f"{prefix}-{clean_name}"
 
+        # Éviter doublon si déjà ouvert
         existing = discord.utils.get(guild.text_channels, name=expected_channel_name)
         if existing:
             await interaction.response.send_message(
@@ -127,22 +168,28 @@ class TicketSelect(discord.ui.Select):
 
         await interaction.response.defer(ephemeral=True)
 
-        # Permissions : uniquement le créateur et les modérateurs/staff
+        bot_member = guild.me or guild.get_member(interaction.client.user.id)
+        if not bot_member or not bot_member.guild_permissions.manage_channels:
+            await interaction.followup.send(
+                "❌ **Erreur de permission Discord** : Le bot doit avoir la permission **Gérer les salons** (`Manage Channels`) pour créer des tickets. Donnez-lui cette permission dans les paramètres du serveur.",
+                ephemeral=True
+            )
+            return
+
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False, view_channel=False),
-            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, view_channel=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, view_channel=True, manage_channels=True)
+            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, view_channel=True, attach_files=True, embed_links=True),
+            bot_member: discord.PermissionOverwrite(read_messages=True, send_messages=True, view_channel=True, manage_channels=True, manage_messages=True)
         }
 
-        # Ajouter les rôles ayant permission de gérer le serveur ou administrateur
+        # Staff et administrateurs
         for role in guild.roles:
             if role.permissions.administrator or role.permissions.manage_guild or role.permissions.manage_channels:
                 overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True, view_channel=True)
 
         try:
-            # Chercher ou créer une catégorie "TICKETS" si possible
             category = discord.utils.get(guild.categories, name="TICKETS")
-            if not category:
+            if not category and bot_member.guild_permissions.manage_channels:
                 try:
                     category = await guild.create_category("TICKETS")
                 except Exception:
@@ -155,27 +202,53 @@ class TicketSelect(discord.ui.Select):
                 reason=f"Ticket {cfg['label']} ouvert par {interaction.user}"
             )
 
-            embed = discord.Embed(
-                title=cfg["title"],
-                description=cfg["instructions"],
-                color=0x5865F2
-            )
-            embed.set_author(name=str(interaction.user), icon_url=getattr(interaction.user.display_avatar, "url", None))
-            embed.set_footer(text="Cliquez sur le bouton ci-dessous pour fermer ce ticket.")
+            if cfg.get("is_tournament"):
+                # Message spécifique tournoi avec template à remplir
+                embed = discord.Embed(
+                    title="🏆 Inscription Tournoi MK ARENA",
+                    description=(
+                        f"Bienvenue {interaction.user.mention} !\n\n"
+                        "Pour valider l'inscription de votre équipe, **copiez le modèle ci-dessous**, remplissez chaque champ puis envoyez-le dans ce salon."
+                    ),
+                    color=0xF1C40F
+                )
+                embed.set_footer(text="Un responsable esport vérifiera la conformité de votre line-up.")
+                
+                # Envoi du message avec le template prêt à être copié
+                await channel.send(
+                    content=f"{interaction.user.mention} Voici votre fiche d'inscription :",
+                    embed=embed,
+                    view=TicketControlView()
+                )
+                # Envoi du texte brut formaté pour copie facile sur téléphone
+                await channel.send(f"```markdown\n{INSCRIPTION_TEMPLATE}\n```")
+            else:
+                embed = discord.Embed(
+                    title=cfg["title"],
+                    description=cfg.get("instructions", "Veuillez détailler votre demande."),
+                    color=0x5865F2
+                )
+                embed.set_author(name=str(interaction.user), icon_url=getattr(interaction.user.display_avatar, "url", None))
+                embed.set_footer(text="Cliquez sur le bouton ci-dessous pour fermer ce ticket.")
 
-            await channel.send(
-                content=f"{interaction.user.mention} Bienvenue dans votre ticket !",
-                embed=embed,
-                view=TicketControlView()
-            )
+                await channel.send(
+                    content=f"{interaction.user.mention} Bienvenue dans votre salon !",
+                    embed=embed,
+                    view=TicketControlView()
+                )
 
             await interaction.followup.send(
                 f"✅ Votre ticket **{cfg['label']}** a été créé : {channel.mention}",
                 ephemeral=True
             )
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "❌ **Erreur Discord : Permission refusée**. Vérifiez que le rôle du bot est placé suffisamment haut et qu'il possède la permission **Gérer les salons**.",
+                ephemeral=True
+            )
         except Exception as e:
             logger.error("Erreur création ticket : %s", e)
-            await interaction.followup.send(f"❌ Erreur lors de la création du ticket : {e}", ephemeral=True)
+            await interaction.followup.send(f"❌ Erreur lors de la création du ticket : `{e}`", ephemeral=True)
 
 class TicketPanelView(discord.ui.View):
     def __init__(self):
@@ -193,10 +266,10 @@ class Tickets(commands.Cog):
             description=(
                 "Bienvenue sur l'espace d'accueil MK ARENA.\n"
                 "Sélectionnez ci-dessous la raison pour laquelle vous souhaitez ouvrir un salon privé avec notre équipe :\n\n"
-                "🏆 **Inscription Tournoi** : Inscrire votre équipe aux compétitions CODM.\n"
+                "🏆 **Inscription Tournoi** : Formulaire officiel d'inscription pour votre équipe CODM.\n"
                 "🛡️ **Recrutement Staff** : Rejoindre notre équipe d'organisation ou de modération.\n"
                 "⚔️ **Recrutement Clan** : Candidater pour intégrer l'équipe compétitive MK.\n"
-                "❓ **Support & Questions** : Une interrogation, réclamation ou besoin d'aide."
+                "❓ **Support & Questions** : Une question, réclamation ou besoin d'assistance."
             ),
             color=0x2B2D31
         )
@@ -226,7 +299,6 @@ class Tickets(commands.Cog):
 
     @app_commands.command(name="close", description="Fermer le ticket actuel.")
     async def slash_close(self, interaction: discord.Interaction):
-        # Vérifier si c'est un salon ticket
         name = interaction.channel.name.lower()
         is_ticket = any(name.startswith(cfg["channel_prefix"]) for cfg in TICKET_TYPES.values()) or "ticket" in name
         if not is_ticket and not is_authorized(interaction.user):

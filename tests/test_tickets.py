@@ -1,5 +1,5 @@
 import pytest
-from cogs.tickets import TICKET_TYPES, TicketPanelView, TicketControlView
+from cogs.tickets import TICKET_TYPES, TicketPanelView, TicketControlView, INSCRIPTION_TEMPLATE
 from bot.client import ChachaBot
 
 def test_ticket_types_configured():
@@ -10,7 +10,7 @@ def test_ticket_types_configured():
     for key, data in TICKET_TYPES.items():
         assert "label" in data
         assert "channel_prefix" in data
-        assert "instructions" in data
+    assert "INSCRIPTION DE L’ÉQUIPE" in INSCRIPTION_TEMPLATE
 
 def test_ticket_views():
     panel_view = TicketPanelView()
