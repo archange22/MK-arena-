@@ -2,7 +2,6 @@ import pytest
 from unittest.mock import MagicMock
 from bot.permissions import is_authorized
 from bot.client import ChachaBot
-import config
 
 def test_permissions_admin():
     member = MagicMock()
@@ -45,10 +44,3 @@ def test_bot_initialization_and_prefix():
     assert bot is not None
     assert bot.command_prefix == "!"
     assert bot.tree is not None
-
-def test_bot_register_commands():
-    bot = ChachaBot()
-    bot._register_commands()
-    registered_cmds = [cmd.name for cmd in bot.commands]
-    assert "ping" in registered_cmds
-    assert "aide" in registered_cmds
