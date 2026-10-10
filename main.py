@@ -21,17 +21,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 @bot.event
-async def setup_hook():
-    """Publie les commandes slash globales."""
-    try:
-        synced = await bot.tree.sync()
-        log.info("Synchronised %s global slash commands", len(synced))
-    except discord.DiscordException:
-        log.exception("Could not synchronise global slash commands")
-        raise
-
-
-@bot.event
 async def on_ready():
     log.info(
         "MK Arena connected as %s (ID: %s) in %s server(s)",
@@ -41,27 +30,27 @@ async def on_ready():
     )
 
 
-@bot.hybrid_command(name="ping", description="Vérifie si MK Arena répond")
+@bot.command(name="ping", description="Vérifie si MK Arena répond")
 async def ping(ctx: commands.Context):
-    """Utilise !ping ou /ping."""
+    """Commande préfixe !ping."""
     await ctx.send(f"🏓 Pong ! Latence : {round(bot.latency * 1000)} ms")
 
 
-@bot.hybrid_command(name="aide", description="Affiche la liste des commandes")
+@bot.command(name="aide", description="Affiche la liste des commandes")
 async def aide(ctx: commands.Context):
-    """Utilise !aide ou /aide."""
+    """Commande préfixe !aide."""
     embed = discord.Embed(
         title="🤖 MK Arena | Aide",
-        description="Les commandes sont disponibles avec le préfixe ! et en slash /.",
+        description="Commandes MK Arena utilisant le préfixe !.",
         color=discord.Color.blurple(),
     )
-    embed.add_field(name="Général", value="`!ping` / `/ping`\n`!aide` / `/aide`\n`!serveur` / `/serveur`\n`!userinfo` / `/userinfo`\n`!avatar` / `/avatar`", inline=False)
-    embed.add_field(name="Modération", value="`!clear 10` / `/clear`\n`!kick @membre raison` / `/kick`\n`!ban @membre raison` / `/ban`\n`!timeout @membre minutes` / `/timeout`\n`!slowmode secondes` / `/slowmode`\n`!lock` / `/lock`\n`!unlock` / `/unlock`", inline=False)
-    embed.set_footer(text="MK Arena • Commandes préfixe + slash")
+    embed.add_field(name="Général", value="`!ping`\n`!aide`\n`!serveur`\n`!userinfo [membre]`\n`!avatar [membre]`", inline=False)
+    embed.add_field(name="Modération", value="`!clear 10`\n`!kick @membre raison`\n`!ban @membre raison`\n`!timeout @membre minutes raison`\n`!slowmode secondes`\n`!lock`\n`!unlock`", inline=False)
+    embed.set_footer(text="MK Arena • Commandes préfixe !")
     await ctx.send(embed=embed)
 
 
-@bot.hybrid_command(name="serveur", description="Affiche les informations du serveur")
+@bot.command(name="serveur", description="Affiche les informations du serveur")
 @commands.guild_only()
 async def serveur(ctx: commands.Context):
     guild = ctx.guild
@@ -74,7 +63,7 @@ async def serveur(ctx: commands.Context):
     await ctx.send(embed=embed)
 
 
-@bot.hybrid_command(name="userinfo", description="Affiche les informations d'un membre")
+@bot.command(name="userinfo", description="Affiche les informations d'un membre")
 @commands.guild_only()
 async def userinfo(ctx: commands.Context, membre: discord.Member = None):
     membre = membre or ctx.author
@@ -87,7 +76,7 @@ async def userinfo(ctx: commands.Context, membre: discord.Member = None):
     await ctx.send(embed=embed)
 
 
-@bot.hybrid_command(name="avatar", description="Affiche l'avatar d'un membre")
+@bot.command(name="avatar", description="Affiche l'avatar d'un membre")
 async def avatar(ctx: commands.Context, membre: discord.Member = None):
     membre = membre or ctx.author
     embed = discord.Embed(title=f"Avatar de {membre}", color=discord.Color.blurple())
@@ -95,7 +84,7 @@ async def avatar(ctx: commands.Context, membre: discord.Member = None):
     await ctx.send(embed=embed)
 
 
-@bot.hybrid_command(name="clear", description="Supprime un nombre de messages")
+@bot.command(name="clear", description="Supprime un nombre de messages")
 @commands.has_permissions(manage_messages=True)
 @commands.bot_has_permissions(manage_messages=True, read_message_history=True)
 @commands.guild_only()
@@ -107,7 +96,7 @@ async def clear(ctx: commands.Context, nombre: int):
     await ctx.send(f"🧹 {max(0, len(deleted) - (0 if ctx.interaction else 1))} message(s) supprimé(s).", delete_after=5)
 
 
-@bot.hybrid_command(name="kick", description="Expulse un membre du serveur")
+@bot.command(name="kick", description="Expulse un membre du serveur")
 @commands.has_permissions(kick_members=True)
 @commands.bot_has_permissions(kick_members=True)
 @commands.guild_only()
@@ -119,7 +108,7 @@ async def kick(ctx: commands.Context, membre: discord.Member, *, raison: str = "
     await ctx.send(f"👢 {membre.mention} a été expulsé. Raison : {raison}")
 
 
-@bot.hybrid_command(name="ban", description="Bannit un membre du serveur")
+@bot.command(name="ban", description="Bannit un membre du serveur")
 @commands.has_permissions(ban_members=True)
 @commands.bot_has_permissions(ban_members=True)
 @commands.guild_only()
@@ -131,7 +120,7 @@ async def ban(ctx: commands.Context, membre: discord.Member, *, raison: str = "A
     await ctx.send(f"🔨 {membre} a été banni. Raison : {raison}")
 
 
-@bot.hybrid_command(name="timeout", description="Met un membre en timeout pour X minutes")
+@bot.command(name="timeout", description="Met un membre en timeout pour X minutes")
 @commands.has_permissions(moderate_members=True)
 @commands.bot_has_permissions(moderate_members=True)
 @commands.guild_only()
@@ -146,7 +135,7 @@ async def timeout(ctx: commands.Context, membre: discord.Member, minutes: int, *
     await ctx.send(f"⏳ {membre.mention} est en timeout pendant {minutes} minute(s). Raison : {raison}")
 
 
-@bot.hybrid_command(name="slowmode", description="Configure le mode lent du salon")
+@bot.command(name="slowmode", description="Configure le mode lent du salon")
 @commands.has_permissions(manage_channels=True)
 @commands.bot_has_permissions(manage_channels=True)
 @commands.guild_only()
@@ -166,7 +155,7 @@ async def set_channel_lock(ctx: commands.Context, locked: bool):
     await ctx.send("🔒 Salon verrouillé." if locked else "🔓 Salon déverrouillé.")
 
 
-@bot.hybrid_command(name="lock", description="Verrouille le salon actuel")
+@bot.command(name="lock", description="Verrouille le salon actuel")
 @commands.has_permissions(manage_channels=True)
 @commands.bot_has_permissions(manage_channels=True)
 @commands.guild_only()
@@ -174,7 +163,7 @@ async def lock(ctx: commands.Context):
     await set_channel_lock(ctx, True)
 
 
-@bot.hybrid_command(name="unlock", description="Déverrouille le salon actuel")
+@bot.command(name="unlock", description="Déverrouille le salon actuel")
 @commands.has_permissions(manage_channels=True)
 @commands.bot_has_permissions(manage_channels=True)
 @commands.guild_only()
@@ -203,22 +192,6 @@ async def on_command_error(ctx: commands.Context, error: commands.CommandError):
         await ctx.send(message)
     except discord.DiscordException:
         log.exception("Impossible d'envoyer le message d'erreur")
-
-
-@bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-    if isinstance(error, discord.app_commands.CheckFailure):
-        message = "❌ Tu n'as pas les permissions nécessaires pour cette commande."
-    else:
-        log.error("Erreur slash command: %s", error, exc_info=error)
-        message = "❌ Une erreur est survenue pendant l'exécution de la commande."
-    try:
-        if interaction.response.is_done():
-            await interaction.followup.send(message, ephemeral=True)
-        else:
-            await interaction.response.send_message(message, ephemeral=True)
-    except discord.DiscordException:
-        log.exception("Impossible d'envoyer l'erreur slash")
 
 
 if __name__ == "__main__":
