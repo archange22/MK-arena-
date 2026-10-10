@@ -507,7 +507,7 @@ def build_main_panel_embed(guild: discord.Guild):
     embed = discord.Embed(
         title="⚔️ MK ARENA • Centre de contrôle",
         description=(
-            f"Bienvenue dans le panneau d'administration de **{guild.name}**.\\n"
+            f"Bienvenue dans le panneau d'administration de **{guild.name}**.\n"
             "Choisis une catégorie avec les boutons ci-dessous. Les réglages sensibles restent réservés aux administrateurs."
         ),
         color=discord.Color.from_rgb(111, 66, 193),
@@ -534,28 +534,28 @@ async def build_main_section_embed(guild: discord.Guild, section: str):
     embed = discord.Embed(title=titles[section], color=discord.Color.from_rgb(111, 66, 193))
     if section == "config":
         embed.description = (
-            "Les réglages disponibles dans cette version :\\n"
-            "• Formats et règles des tournois via le sous-panel Tournois.\\n"
-            "• Les commandes existantes restent utilisables avec le préfixe !.\\n\\n"
+            "Les réglages disponibles dans cette version :\n"
+            "• Formats et règles des tournois via le sous-panel Tournois.\n"
+            "• Les commandes existantes restent utilisables avec le préfixe !.\n\n"
             "**Prochaine extension :** salons de bienvenue, logs, rôles automatiques et messages personnalisés."
         )
         embed.add_field(name="Commande utile", value="!config tournoi panel", inline=False)
     elif section == "moderation":
         embed.description = (
-            "Les commandes de modération déjà disponibles :\\n"
-            "!clear 10 • supprimer des messages\\n"
-            "!warn @membre raison • avertir\\n"
-            "!warnings @membre • consulter les avertissements\\n"
-            "!unwarn @membre ID • retirer un avertissement\\n"
-            "!kick @membre raison • expulser\\n"
-            "!ban @membre raison • bannir\\n"
-            "!timeout @membre minutes raison • timeout\\n"
+            "Les commandes de modération déjà disponibles :\n"
+            "!clear 10 • supprimer des messages\n"
+            "!warn @membre raison • avertir\n"
+            "!warnings @membre • consulter les avertissements\n"
+            "!unwarn @membre ID • retirer un avertissement\n"
+            "!kick @membre raison • expulser\n"
+            "!ban @membre raison • bannir\n"
+            "!timeout @membre minutes raison • timeout\n"
             "!slowmode secondes, !lock, !unlock"
         )
         embed.set_footer(text="Les permissions Discord requises sont vérifiées par le bot.")
     elif section == "community":
         embed.description = (
-            "Cette section est préparée dans le panel, mais ses systèmes ne sont pas encore activés.\\n\\n"
+            "Cette section est préparée dans le panel, mais ses systèmes ne sont pas encore activés.\n\n"
             "À développer : XP et niveaux, classement, messages de bienvenue, rôles automatiques et récompenses."
         )
     elif section == "stats":
