@@ -510,6 +510,14 @@ async def tournoi_panel(ctx: commands.Context):
     await ctx.send(embed=embed, view=view)
 
 
+@config.command(name="panel", description="Ouvre le panel de configuration MK Arena")
+@commands.guild_only()
+async def config_panel(ctx: commands.Context):
+    view = TournamentConfigPanel(ctx.guild.id)
+    embed = await build_tournament_panel_embed(ctx.guild.id, view.selected_key)
+    await ctx.send(content="⚙️ **Panel de configuration MK Arena**", embed=embed, view=view)
+
+
 @bot.tree.command(name="config", description="Ouvre le panel interactif de configuration MK Arena")
 async def slash_config(interaction: discord.Interaction):
     if interaction.guild is None:
