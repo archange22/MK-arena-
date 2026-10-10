@@ -56,6 +56,18 @@ def init_database():
                 FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE
             )"""
         )
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS tournament_config (
+                guild_id INTEGER NOT NULL,
+                format_key TEXT NOT NULL,
+                format_label TEXT NOT NULL,
+                details TEXT NOT NULL DEFAULT '',
+                rules TEXT NOT NULL DEFAULT '',
+                updated_by INTEGER NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (guild_id, format_key)
+            )"""
+        )
 
 
 
@@ -309,6 +321,108 @@ async def tournoi(ctx: commands.Context):
         "`!config tournoi lancer <ID>`, `!config tournoi inscrire <ID>`, "
         "`!config tournoi desinscrire <ID>`."
     )
+
+TOURNAMENT_FORMATS = {
+    "bo3_5v5": "CODM BO3 • 5v5",
+    "battle_royale": "Battle Royale",
+    "3v3": "CODM • 3v3",
+    "1v1": "CODM • 1v1",
+    "2v2": "CODM • 2v2",
+    "full_sniper": "Full Sniper",
+    "full_smg": "Full SMG",
+}
+
+
+@tournoi.command(name="panel", description="Affiche le panel des formats et règles")
+@commands.guild_only()
+async def tournoi_panel(ctx: commands.Context):
+    with sqlite3.connect(DB_PATH) as connection:
+        rows = connection.execute(
+            "SELECT format_key, details, rules FROM tournament_config WHERE guild_id = ?",
+            (ctx.guild.id,),
+        ).fetchall()
+    saved = {key: (details, rules) for key, details, rules in rows}
+    embed = discord.Embed(
+        title="🏆 MK Arena • Panel des tournois CODM",
+        description=(
+            "Formats disponibles et informations configurées par les administrateurs.\n"
+            "Utilise les commandes indiquées ci-dessous pour modifier le panel."
+        ),
+        color=discord.Color.blurple(),
+    )
+    for key, label in TOURNAMENT_FORMATS.items():
+        details, rules = saved.get(key, ("", ""))
+        value = f"**Infos :** {details or 'À configurer par un administrateur.'}\n"
+        value += f"**Règles :** {rules or 'À configurer par un administrateur.'}"
+        embed.add_field(name=label, value=value[:1024], inline=False)
+    embed.add_field(
+        name="🛠️ Commandes administrateur",
+        value=(
+            "`!config tournoi format bo3_5v5 Infos du match...`\n"
+            "`!config tournoi regles bo3_5v5 Règles du match...`\n"
+            "Remplace `bo3_5v5` par : `battle_royale`, `3v3`, `1v1`, "
+            "`2v2`, `full_sniper` ou `full_smg`.\n"
+            "Permissions requises : Gérer le serveur."
+        ),
+        inline=False,
+    )
+    embed.set_footer(text="Les paramètres sont séparés par serveur Discord.")
+    await ctx.send(embed=embed)
+
+
+@tournoi.command(name="format", description="Configure les informations d'un format")
+@commands.guild_only()
+@commands.has_permissions(manage_guild=True)
+async def tournoi_format(ctx: commands.Context, format_key: str, *, details: str):
+    format_key = format_key.lower()
+    if format_key not in TOURNAMENT_FORMATS:
+        await ctx.send("❌ Format inconnu. Choisis : " + ", ".join(f"`{key}`" for key in TOURNAMENT_FORMATS))
+        return
+    details = details.strip()
+    if not details:
+        await ctx.send("❌ Ajoute les informations du format.")
+        return
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.execute(
+            """INSERT INTO tournament_config
+               (guild_id, format_key, format_label, details, rules, updated_by)
+               VALUES (?, ?, ?, ?, '', ?)
+               ON CONFLICT(guild_id, format_key) DO UPDATE SET
+               format_label = excluded.format_label,
+               details = excluded.details,
+               updated_by = excluded.updated_by,
+               updated_at = CURRENT_TIMESTAMP""",
+            (ctx.guild.id, format_key, TOURNAMENT_FORMATS[format_key], details[:1800], ctx.author.id),
+        )
+    await ctx.send(f"✅ Informations enregistrées pour **{TOURNAMENT_FORMATS[format_key]}**. Utilise `!config tournoi panel` pour voir le résultat.")
+
+
+@tournoi.command(name="regles", description="Configure les règles d'un format")
+@commands.guild_only()
+@commands.has_permissions(manage_guild=True)
+async def tournoi_regles(ctx: commands.Context, format_key: str, *, rules: str):
+    format_key = format_key.lower()
+    if format_key not in TOURNAMENT_FORMATS:
+        await ctx.send("❌ Format inconnu. Choisis : " + ", ".join(f"`{key}`" for key in TOURNAMENT_FORMATS))
+        return
+    rules = rules.strip()
+    if not rules:
+        await ctx.send("❌ Ajoute les règles à enregistrer.")
+        return
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.execute(
+            """INSERT INTO tournament_config
+               (guild_id, format_key, format_label, details, rules, updated_by)
+               VALUES (?, ?, ?, '', ?, ?)
+               ON CONFLICT(guild_id, format_key) DO UPDATE SET
+               format_label = excluded.format_label,
+               rules = excluded.rules,
+               updated_by = excluded.updated_by,
+               updated_at = CURRENT_TIMESTAMP""",
+            (ctx.guild.id, format_key, TOURNAMENT_FORMATS[format_key], rules[:1800], ctx.author.id),
+        )
+    await ctx.send(f"✅ Règles enregistrées pour **{TOURNAMENT_FORMATS[format_key]}**. Utilise `!config tournoi panel` pour voir le résultat.")
+
 
 @tournoi.command(name="creer", description="Crée un tournoi CODM")
 @commands.guild_only()
