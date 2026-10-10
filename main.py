@@ -892,6 +892,35 @@ class TicketCloseView(discord.ui.View):
         await interaction.response.send_message(f"Ticket fermé par {interaction.user.mention}. Le salon est conservé pour l'équipe.")
 
 
+
+class SupportPanelView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=900)
+        self.guild_id = guild_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message("Ce panel appartient à un autre serveur.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Ouvrir le panneau de ticket", style=discord.ButtonStyle.success, emoji="🎫", row=0)
+    async def open_ticket_panel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="Support MK Arena",
+            description="Clique sur le bouton ci-dessous pour créer ton salon privé. Un seul ticket ouvert par membre.",
+            color=discord.Color.blurple(),
+        )
+        await interaction.response.send_message(embed=embed, view=TicketPanelView(), ephemeral=True)
+
+    @discord.ui.button(label="Retour à l'accueil", style=discord.ButtonStyle.secondary, emoji="🏠", row=0)
+    async def back_home(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.guild is None:
+            await interaction.response.send_message("Utilise ce panel dans un serveur.", ephemeral=True)
+            return
+        await interaction.response.edit_message(embed=build_main_panel_embed(interaction.guild), view=MKArenaHomePanel(self.guild_id))
+
+
 @bot.command(name="ticketpanel", description="Publie le panneau de création de tickets")
 @commands.guild_only()
 @commands.has_permissions(manage_guild=True)
