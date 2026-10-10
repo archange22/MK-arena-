@@ -333,41 +333,173 @@ TOURNAMENT_FORMATS = {
 }
 
 
-@tournoi.command(name="panel", description="Affiche le panel des formats et règles")
-@commands.guild_only()
-async def tournoi_panel(ctx: commands.Context):
+async def get_tournament_config(guild_id: int, format_key: str):
     with sqlite3.connect(DB_PATH) as connection:
-        rows = connection.execute(
-            "SELECT format_key, details, rules FROM tournament_config WHERE guild_id = ?",
-            (ctx.guild.id,),
-        ).fetchall()
-    saved = {key: (details, rules) for key, details, rules in rows}
+        row = connection.execute(
+            "SELECT details, rules FROM tournament_config WHERE guild_id = ? AND format_key = ?",
+            (guild_id, format_key),
+        ).fetchone()
+    return row or ("", "")
+
+
+async def build_tournament_panel_embed(guild_id: int, format_key: str):
+    label = TOURNAMENT_FORMATS[format_key]
+    details, rules = await get_tournament_config(guild_id, format_key)
     embed = discord.Embed(
-        title="🏆 MK Arena • Panel des tournois CODM",
+        title="🏆 MK Arena • Configuration des tournois",
         description=(
-            "Formats disponibles et informations configurées par les administrateurs.\n"
-            "Utilise les commandes indiquées ci-dessous pour modifier le panel."
+            f"**Mode sélectionné : {label}**\n\n"
+            "Choisis un mode dans le menu, puis utilise les boutons pour modifier ses informations ou ses règles."
         ),
         color=discord.Color.blurple(),
     )
-    for key, label in TOURNAMENT_FORMATS.items():
-        details, rules = saved.get(key, ("", ""))
-        value = f"**Infos :** {details or 'À configurer par un administrateur.'}\n"
-        value += f"**Règles :** {rules or 'À configurer par un administrateur.'}"
-        embed.add_field(name=label, value=value[:1024], inline=False)
-    embed.add_field(
-        name="🛠️ Commandes administrateur",
-        value=(
-            "`!config tournoi format bo3_5v5 Infos du match...`\n"
-            "`!config tournoi regles bo3_5v5 Règles du match...`\n"
-            "Remplace `bo3_5v5` par : `battle_royale`, `3v3`, `1v1`, "
-            "`2v2`, `full_sniper` ou `full_smg`.\n"
-            "Permissions requises : Gérer le serveur."
-        ),
-        inline=False,
-    )
-    embed.set_footer(text="Les paramètres sont séparés par serveur Discord.")
-    await ctx.send(embed=embed)
+    embed.add_field(name="📋 Informations du format", value=(details or "Pas encore configurées.")[:1024], inline=False)
+    embed.add_field(name="📜 Règles du format", value=(rules or "Pas encore configurées.")[:1024], inline=False)
+    embed.set_footer(text="Modification réservée aux membres ayant la permission Gérer le serveur.")
+    return embed
+
+
+class TournamentFormatSelect(discord.ui.Select):
+    def __init__(self, panel_view):
+        self.panel_view = panel_view
+        options = [
+            discord.SelectOption(label=label, value=key, default=(key == panel_view.selected_key))
+            for key, label in TOURNAMENT_FORMATS.items()
+        ]
+        super().__init__(
+            placeholder="Choisir un mode de tournoi...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="mk_arena_tournament_format_select",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        self.panel_view.selected_key = self.values[0]
+        for option in self.options:
+            option.default = option.value == self.panel_view.selected_key
+        embed = await build_tournament_panel_embed(interaction.guild_id, self.panel_view.selected_key)
+        await interaction.response.edit_message(embed=embed, view=self.panel_view)
+
+
+class TournamentInfoModal(discord.ui.Modal):
+    def __init__(self, guild_id: int, format_key: str, initial: str = ""):
+        self.guild_id = guild_id
+        self.format_key = format_key
+        super().__init__(title=f"Modifier : {TOURNAMENT_FORMATS[format_key]}", timeout=300)
+        self.details_input = discord.ui.TextInput(
+            label="Informations du mode",
+            placeholder="Ex. BO3, 5 joueurs par équipe, conditions de victoire...",
+            default=initial[:1800] if initial else None,
+            style=discord.TextStyle.paragraph,
+            max_length=1800,
+            required=True,
+        )
+        self.add_item(self.details_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        details = str(self.details_input.value).strip()
+        with sqlite3.connect(DB_PATH) as connection:
+            connection.execute(
+                """INSERT INTO tournament_config
+                   (guild_id, format_key, format_label, details, rules, updated_by)
+                   VALUES (?, ?, ?, ?, '', ?)
+                   ON CONFLICT(guild_id, format_key) DO UPDATE SET
+                   format_label = excluded.format_label,
+                   details = excluded.details,
+                   updated_by = excluded.updated_by,
+                   updated_at = CURRENT_TIMESTAMP""",
+                (self.guild_id, self.format_key, TOURNAMENT_FORMATS[self.format_key], details, interaction.user.id),
+            )
+        await interaction.response.send_message(
+            f"✅ Informations enregistrées pour **{TOURNAMENT_FORMATS[self.format_key]}**. Clique sur **Actualiser** dans le panel.",
+            ephemeral=True,
+        )
+
+
+class TournamentRulesModal(discord.ui.Modal):
+    def __init__(self, guild_id: int, format_key: str, initial: str = ""):
+        self.guild_id = guild_id
+        self.format_key = format_key
+        super().__init__(title=f"Règles : {TOURNAMENT_FORMATS[format_key]}", timeout=300)
+        self.rules_input = discord.ui.TextInput(
+            label="Règles du tournoi",
+            placeholder="Ex. interdiction de tricher, retard, forfait, preuves...",
+            default=initial[:1800] if initial else None,
+            style=discord.TextStyle.paragraph,
+            max_length=1800,
+            required=True,
+        )
+        self.add_item(self.rules_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        rules = str(self.rules_input.value).strip()
+        with sqlite3.connect(DB_PATH) as connection:
+            connection.execute(
+                """INSERT INTO tournament_config
+                   (guild_id, format_key, format_label, details, rules, updated_by)
+                   VALUES (?, ?, ?, '', ?, ?)
+                   ON CONFLICT(guild_id, format_key) DO UPDATE SET
+                   format_label = excluded.format_label,
+                   rules = excluded.rules,
+                   updated_by = excluded.updated_by,
+                   updated_at = CURRENT_TIMESTAMP""",
+                (self.guild_id, self.format_key, TOURNAMENT_FORMATS[self.format_key], rules, interaction.user.id),
+            )
+        await interaction.response.send_message(
+            f"✅ Règles enregistrées pour **{TOURNAMENT_FORMATS[self.format_key]}**. Clique sur **Actualiser** dans le panel.",
+            ephemeral=True,
+        )
+
+
+class TournamentConfigPanel(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=600)
+        self.guild_id = guild_id
+        self.selected_key = "bo3_5v5"
+        self.add_item(TournamentFormatSelect(self))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message("❌ Ce panel appartient à un autre serveur.", ephemeral=True)
+            return False
+        return True
+
+    async def require_admin(self, interaction: discord.Interaction) -> bool:
+        if not interaction.user.guild_permissions.manage_guild:
+            await interaction.response.send_message(
+                "❌ Il faut la permission **Gérer le serveur** pour modifier ce panel.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="Modifier les infos", style=discord.ButtonStyle.primary, emoji="📝", row=1)
+    async def edit_info(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.require_admin(interaction):
+            return
+        details, _ = await get_tournament_config(self.guild_id, self.selected_key)
+        await interaction.response.send_modal(TournamentInfoModal(self.guild_id, self.selected_key, details))
+
+    @discord.ui.button(label="Modifier les règles", style=discord.ButtonStyle.primary, emoji="📜", row=1)
+    async def edit_rules(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.require_admin(interaction):
+            return
+        _, rules = await get_tournament_config(self.guild_id, self.selected_key)
+        await interaction.response.send_modal(TournamentRulesModal(self.guild_id, self.selected_key, rules))
+
+    @discord.ui.button(label="Actualiser", style=discord.ButtonStyle.secondary, emoji="🔄", row=2)
+    async def refresh_panel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = await build_tournament_panel_embed(self.guild_id, self.selected_key)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+@tournoi.command(name="panel", description="Ouvre le panel interactif des tournois CODM")
+@commands.guild_only()
+async def tournoi_panel(ctx: commands.Context):
+    view = TournamentConfigPanel(ctx.guild.id)
+    embed = await build_tournament_panel_embed(ctx.guild.id, view.selected_key)
+    await ctx.send(embed=embed, view=view)
 
 
 @tournoi.command(name="format", description="Configure les informations d'un format")
