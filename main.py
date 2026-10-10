@@ -92,8 +92,8 @@ async def clear(ctx: commands.Context, nombre: int):
     if nombre < 1 or nombre > 100:
         await ctx.send("Choisis un nombre entre 1 et 100.")
         return
-    deleted = await ctx.channel.purge(limit=nombre + (0 if ctx.interaction else 1))
-    await ctx.send(f"🧹 {max(0, len(deleted) - (0 if ctx.interaction else 1))} message(s) supprimé(s).", delete_after=5)
+    deleted = await ctx.channel.purge(limit=nombre + 1)
+    await ctx.send(f"🧹 {max(0, len(deleted) - 1)} message(s) supprimé(s).", delete_after=5)
 
 
 @bot.command(name="kick", description="Expulse un membre du serveur")
