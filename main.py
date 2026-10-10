@@ -37,15 +37,24 @@ async def ping(ctx: commands.Context):
 
 
 @bot.command(name="aide", description="Affiche la liste des commandes")
+@commands.cooldown(1, 5, commands.BucketType.user)
 async def aide(ctx: commands.Context):
-    """Commande préfixe !aide."""
+    """Commande préfixe !aide, limitée à une utilisation toutes les 5 secondes."""
     embed = discord.Embed(
         title="🤖 MK Arena | Aide",
         description="Commandes MK Arena utilisant le préfixe !.",
         color=discord.Color.blurple(),
     )
-    embed.add_field(name="Général", value="`!ping`\n`!aide`\n`!serveur`\n`!userinfo [membre]`\n`!avatar [membre]`", inline=False)
-    embed.add_field(name="Modération", value="`!clear 10`\n`!kick @membre raison`\n`!ban @membre raison`\n`!timeout @membre minutes raison`\n`!slowmode secondes`\n`!lock`\n`!unlock`", inline=False)
+    embed.add_field(
+        name="Général",
+        value="\`!ping\`\n\`!aide\`\n\`!serveur\`\n\`!userinfo [membre]\`\n\`!avatar [membre]\`",
+        inline=False,
+    )
+    embed.add_field(
+        name="Modération",
+        value="\`!clear 10\`\n\`!kick @membre raison\`\n\`!ban @membre raison\`\n\`!timeout @membre minutes raison\`\n\`!slowmode secondes\`\n\`!lock\`\n\`!unlock\`",
+        inline=False,
+    )
     embed.set_footer(text="MK Arena • Commandes préfixe !")
     await ctx.send(embed=embed)
 
@@ -175,12 +184,15 @@ async def unlock(ctx: commands.Context):
 async def on_command_error(ctx: commands.Context, error: commands.CommandError):
     if isinstance(error, commands.CommandNotFound):
         return
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"⏳ Réessaie dans {error.retry_after:.1f} seconde(s).", delete_after=5)
+        return
     if isinstance(error, commands.MissingPermissions):
         message = "❌ Tu n'as pas les permissions nécessaires pour cette commande."
     elif isinstance(error, commands.BotMissingPermissions):
         message = "❌ Il me manque des permissions pour faire ça."
     elif isinstance(error, commands.MissingRequiredArgument):
-        message = f"❌ Argument manquant : `{error.param.name}`."
+        message = f"❌ Argument manquant : \`{error.param.name}\`."
     elif isinstance(error, commands.BadArgument):
         message = "❌ Argument invalide. Vérifie le membre et les valeurs indiquées."
     elif isinstance(error, commands.NoPrivateMessage):
