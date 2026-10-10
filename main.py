@@ -113,7 +113,7 @@ async def aide(ctx: commands.Context):
     )
     embed.add_field(
         name="Configuration • Tournois CODM",
-        value="`!config tournoi creer 10 Nom du tournoi`\n`!config tournoi liste`\n`!config tournoi info ID`\n`!config tournoi fermer ID`\n`!config tournoi ouvrir ID`\n`!config tournoi lancer ID`\n`!config tournoi inscrire ID`\n`!config tournoi desinscrire ID`",
+        value="`!config tournoi panel`\n`!config tournoi format bo3_5v5 Infos...`\n`!config tournoi regles bo3_5v5 Regles...`\n`!config tournoi creer 10 Nom du tournoi`\n`!config tournoi liste`\n`!config tournoi info ID`\n`!config tournoi fermer ID`\n`!config tournoi ouvrir ID`\n`!config tournoi lancer ID`\n`!config tournoi inscrire ID`\n`!config tournoi desinscrire ID`",
         inline=False,
     )
     embed.set_footer(text="MK Arena • Commandes préfixe !")
@@ -315,11 +315,11 @@ async def config(ctx: commands.Context):
 @config.group(name="tournoi", invoke_without_command=True, description="Gestion des tournois CODM")
 async def tournoi(ctx: commands.Context):
     await ctx.send(
-        "🏆 Commandes tournoi : `!config tournoi creer <places> <nom>`, "
-        "`!config tournoi liste`, `!config tournoi info <ID>`, "
-        "`!config tournoi fermer <ID>`, `!config tournoi ouvrir <ID>`, "
-        "`!config tournoi lancer <ID>`, `!config tournoi inscrire <ID>`, "
-        "`!config tournoi desinscrire <ID>`."
+        "🏆 Panel tournoi : `!config tournoi panel`. "
+        "Admins : `!config tournoi format <mode> <infos>` et "
+        "`!config tournoi regles <mode> <règles>`. "
+        "Gestion : `!config tournoi creer <places> <nom>`, `liste`, `info <ID>`, "
+        "`fermer <ID>`, `ouvrir <ID>`, `lancer <ID>`, `inscrire <ID>`, `desinscrire <ID>`."
     )
 
 TOURNAMENT_FORMATS = {
