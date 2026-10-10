@@ -47,12 +47,12 @@ async def aide(ctx: commands.Context):
     )
     embed.add_field(
         name="Général",
-        value="\`!ping\`\n\`!aide\`\n\`!serveur\`\n\`!userinfo [membre]\`\n\`!avatar [membre]\`",
+        value="`!ping`\n`!aide`\n`!serveur`\n`!userinfo [membre]`\n`!avatar [membre]`",
         inline=False,
     )
     embed.add_field(
         name="Modération",
-        value="\`!clear 10\`\n\`!kick @membre raison\`\n\`!ban @membre raison\`\n\`!timeout @membre minutes raison\`\n\`!slowmode secondes\`\n\`!lock\`\n\`!unlock\`",
+        value="`!clear 10`\n`!kick @membre raison`\n`!ban @membre raison`\n`!timeout @membre minutes raison`\n`!slowmode secondes`\n`!lock`\n`!unlock`",
         inline=False,
     )
     embed.set_footer(text="MK Arena • Commandes préfixe !")
@@ -192,7 +192,7 @@ async def on_command_error(ctx: commands.Context, error: commands.CommandError):
     elif isinstance(error, commands.BotMissingPermissions):
         message = "❌ Il me manque des permissions pour faire ça."
     elif isinstance(error, commands.MissingRequiredArgument):
-        message = f"❌ Argument manquant : \`{error.param.name}\`."
+        message = f"❌ Argument manquant : `{error.param.name}`."
     elif isinstance(error, commands.BadArgument):
         message = "❌ Argument invalide. Vérifie le membre et les valeurs indiquées."
     elif isinstance(error, commands.NoPrivateMessage):
