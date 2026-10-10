@@ -11,7 +11,6 @@ logging.basicConfig(
 log = logging.getLogger("mk-arena")
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = os.getenv("GUILD_ID")
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -19,24 +18,23 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def setup_hook():
-    """Synchronise slash commands when the bot starts."""
+    """Synchronise global slash commands for every server the bot joins."""
     try:
-        if GUILD_ID:
-            guild = discord.Object(id=int(GUILD_ID))
-            bot.tree.copy_global_to(guild=guild)
-            synced = await bot.tree.sync(guild=guild)
-            log.info("Synchronised %s slash commands to guild %s", len(synced), GUILD_ID)
-        else:
-            synced = await bot.tree.sync()
-            log.info("Synchronised %s global slash commands", len(synced))
-    except (ValueError, discord.DiscordException):
-        log.exception("Could not synchronise slash commands")
+        synced = await bot.tree.sync()
+        log.info("Synchronised %s global slash commands", len(synced))
+    except discord.DiscordException:
+        log.exception("Could not synchronise global slash commands")
         raise
 
 
 @bot.event
 async def on_ready():
-    log.info("MK Arena connected as %s (ID: %s)", bot.user, bot.user.id if bot.user else "unknown")
+    log.info(
+        "MK Arena connected as %s (ID: %s) in %s server(s)",
+        bot.user,
+        bot.user.id if bot.user else "unknown",
+        len(bot.guilds),
+    )
 
 
 @bot.tree.command(name="ping", description="Vérifie si MK Arena répond")
@@ -54,7 +52,7 @@ async def slash_aide(interaction: discord.Interaction):
     )
     embed.add_field(name="/ping", value="Vérifie la latence du bot.", inline=False)
     embed.add_field(name="/aide", value="Affiche cette aide.", inline=False)
-    embed.set_footer(text="MK Arena • Version de base")
+    embed.set_footer(text="MK Arena • Multi-serveurs")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
