@@ -16,7 +16,6 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 intents = discord.Intents.default()
 # À activer aussi dans Discord Developer Portal > Bot > Privileged Gateway Intents.
 intents.message_content = True
-intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
