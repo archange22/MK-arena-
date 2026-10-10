@@ -1,5 +1,6 @@
 import os
 import logging
+import sqlite3
 from datetime import timedelta
 
 import discord
@@ -12,16 +13,39 @@ logging.basicConfig(
 log = logging.getLogger("mk-arena")
 
 TOKEN = os.getenv("DISCORD_TOKEN")
+DB_PATH = os.getenv("SQLITE_PATH", "mk_arena.db")
 
 intents = discord.Intents.default()
 # À activer aussi dans Discord Developer Portal > Bot > Privileged Gateway Intents.
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+database_ready = False
+
+
+def init_database():
+    """Crée la table des avertissements si elle n'existe pas."""
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS warnings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                moderator_id INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )"""
+        )
+
 
 
 @bot.event
 async def on_ready():
+    global database_ready
+    if not database_ready:
+        init_database()
+        database_ready = True
+        log.info("Base SQLite initialisée : %s", DB_PATH)
     log.info(
         "MK Arena connected as %s (ID: %s) in %s server(s)",
         bot.user,
@@ -47,16 +71,79 @@ async def aide(ctx: commands.Context):
     )
     embed.add_field(
         name="Général",
-        value="`!ping`\n`!aide`\n`!serveur`\n`!userinfo [membre]`\n`!avatar [membre]`",
+        value="`!ping`\n`!aide`\n`!serveur`\n`!userinfo [membre]`\n`!avatar [membre]`\n`!warnings @membre`",
         inline=False,
     )
     embed.add_field(
         name="Modération",
-        value="`!clear 10`\n`!kick @membre raison`\n`!ban @membre raison`\n`!timeout @membre minutes raison`\n`!slowmode secondes`\n`!lock`\n`!unlock`",
+        value="`!clear 10`\n`!kick @membre raison`\n`!ban @membre raison`\n`!timeout @membre minutes raison`\n`!slowmode secondes`\n`!lock`\n`!unlock`\n`!warn @membre raison`\n`!warnings @membre`\n`!unwarn @membre ID`",
         inline=False,
     )
     embed.set_footer(text="MK Arena • Commandes préfixe !")
     await ctx.send(embed=embed)
+
+
+@bot.command(name="warn", description="Avertit un membre")
+@commands.guild_only()
+@commands.has_permissions(moderate_members=True)
+async def warn(ctx: commands.Context, membre: discord.Member, *, raison: str = None):
+    if not raison or not raison.strip():
+        await ctx.send("❌ Indique la raison. Exemple : `!warn @membre spam`")
+        return
+    if membre.bot:
+        await ctx.send("❌ Les bots ne peuvent pas recevoir d'avertissement.")
+        return
+    if membre.id == ctx.author.id:
+        await ctx.send("❌ Tu ne peux pas t'avertir toi-même.")
+        return
+    with sqlite3.connect(DB_PATH) as connection:
+        cursor = connection.execute(
+            "INSERT INTO warnings (guild_id, user_id, moderator_id, reason) VALUES (?, ?, ?, ?)",
+            (ctx.guild.id, membre.id, ctx.author.id, raison.strip()),
+        )
+        warning_id = cursor.lastrowid
+    await ctx.send(f"⚠️ {membre.mention a reçu un avertissement. ID : `{warning_id}`. Raison : {raison}")
+
+
+@bot.command(name="warnings", description="Affiche les avertissements d'un membre")
+@commands.guild_only()
+@commands.has_permissions(moderate_members=True)
+async def warnings(ctx: commands.Context, membre: discord.Member):
+    with sqlite3.connect(DB_PATH) as connection:
+        rows = connection.execute(
+            "SELECT id, moderator_id, reason, created_at FROM warnings WHERE guild_id = ? AND user_id = ? ORDER BY id DESC LIMIT 10",
+            (ctx.guild.id, membre.id),
+        ).fetchall()
+    if not rows:
+        await ctx.send(f"✅ Aucun avertissement enregistré pour {membre.mention}.")
+        return
+    embed = discord.Embed(
+        title=f"⚠️ Avertissements de {membre}",
+        description=f"10 avertissements maximum affichés. Total affiché : {len(rows)}",
+        color=discord.Color.orange(),
+    )
+    for warning_id, moderator_id, reason, created_at in rows:
+        embed.add_field(
+            name=f"ID {warning_id} • {created_at}",
+            value=f"Raison : {reason}\nModérateur : <@{moderator_id}>",
+            inline=False,
+        )
+    await ctx.send(embed=embed)
+
+
+@bot.command(name="unwarn", description="Retire un avertissement par son ID")
+@commands.guild_only()
+@commands.has_permissions(moderate_members=True)
+async def unwarn(ctx: commands.Context, membre: discord.Member, warning_id: int):
+    with sqlite3.connect(DB_PATH) as connection:
+        cursor = connection.execute(
+            "DELETE FROM warnings WHERE id = ? AND guild_id = ? AND user_id = ?",
+            (warning_id, ctx.guild.id, membre.id),
+        )
+    if cursor.rowcount == 0:
+        await ctx.send("❌ Aucun avertissement correspondant à cet ID pour ce membre.")
+        return
+    await ctx.send(f"✅ Avertissement `{warning_id}` retiré pour {membre.mention}.")
 
 
 @bot.command(name="serveur", description="Affiche les informations du serveur")
