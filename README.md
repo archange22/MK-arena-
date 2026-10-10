@@ -1,24 +1,33 @@
-# 🏆 Chacha Live • Bot Discord MK ARENA
+# MK Arena • Bot Discord
 
-Bot Discord officiel de **MK ARENA** pour la gestion de la communauté et des tournois CODM.
+Bot Discord de la communauté MK Arena, développé avec Python et discord.py.
 
-## 🚀 Fonctionnalités de base
-- **Architecture modulaire et propre** sous `discord.py` (`commands.Bot`).
-- **Préfixe `!`** : support complet des commandes textuelles standard (`!ping`, `!aide`).
-- **Commandes Slash (`/`) synchronisées** : `/ping`, `/aide` avec gestionnaire d'erreur global.
-- **Système de permissions clair** : accessible aux administrateurs, aux gestionnaires du serveur/rôles et au créateur.
-- **Support Render** avec serveur de santé HTTP intégré sur `$PORT`.
-- **Intégration continue (CI)** via GitHub Actions.
+## Commandes incluses
+- `/ping` : vérifie la latence du bot.
+- `/aide` : affiche les commandes disponibles.
+- `!ping` et `!aide` : versions préfixées de base.
 
-## ⚙️ Configuration
-Créer un fichier `.env` ou renseigner sur votre hébergeur :
-```env
-DISCORD_TOKEN=votre_token_discord
-PREFIX=!
-PORT=10000
+## Déploiement sur Render
+Le fichier `render.yaml` configure un **Background Worker** Python. Pour le déployer :
+
+1. Ouvrir le tableau de bord Render et connecter ce dépôt GitHub.
+2. Créer le service à partir du Blueprint (`render.yaml`) ou créer un Background Worker avec ce dépôt.
+3. Ajouter les variables d'environnement :
+   - `DISCORD_TOKEN` : token privé du bot Discord.
+   - `GUILD_ID` : identifiant numérique du serveur Discord, pour synchroniser rapidement les commandes slash sur ce serveur.
+4. Lancer le déploiement et vérifier les logs.
+
+Ne jamais committer le token Discord dans GitHub. Si `GUILD_ID` n'est pas défini, les commandes sont synchronisées globalement et leur propagation peut prendre plus de temps.
+
+## Développement local
+Installer les dépendances :
+
+```bash
+pip install -r requirements.txt
 ```
 
-## 🧪 Tests
+Configurer `DISCORD_TOKEN` et, de préférence, `GUILD_ID` comme variables d'environnement, puis lancer :
+
 ```bash
-pytest -v
+python main.py
 ```
