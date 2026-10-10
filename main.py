@@ -19,6 +19,7 @@ DB_PATH = os.getenv("SQLITE_PATH", "mk_arena.db")
 intents = discord.Intents.default()
 # À activer aussi dans Discord Developer Portal > Bot > Privileged Gateway Intents.
 intents.message_content = True
+intents.members = True  # Active aussi Server Members Intent dans le portail Discord.
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 database_ready = False
@@ -130,7 +131,7 @@ async def aide(ctx: commands.Context):
     )
     embed.add_field(
         name="Général",
-        value="`!ping`\n`!aide`\n`!serveur`\n`!userinfo [membre]`\n`!avatar [membre]`",
+        value="`!ping`\n`!aide`\n`!panel`\n`!serveur`\n`!userinfo [membre]`\n`!avatar [membre]`\n`!profil [membre]`\n`!classement`\n`!ticketpanel`",
         inline=False,
     )
     embed.add_field(
@@ -1010,7 +1011,7 @@ async def on_message(message: discord.Message):
                     )
                 elif now - row[2] >= 60:
                     xp = row[0] + 5
-                    level = int((xp / 100) ** 0.5)
+                    level = xp // 100
                     connection.execute(
                         "UPDATE user_xp SET xp = ?, level = ?, last_message_at = ? WHERE guild_id = ? AND user_id = ?",
                         (xp, level, now, message.guild.id, message.author.id),
