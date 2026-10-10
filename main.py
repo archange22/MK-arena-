@@ -100,11 +100,10 @@ async def aide(ctx: commands.Context):
         inline=False,
     )
     embed.add_field(
-        name="Tournois CODM",
-        value="`!tournoi creer 10 Nom du tournoi`\n`!tournoi liste`\n`!tournoi info ID`\n`!tournoi fermer ID`\n`!tournoi ouvrir ID`\n`!tournoi lancer ID`\n`!inscrire ID`\n`!desinscrire ID`",
+        name="Configuration • Tournois CODM",
+        value="`!config tournoi creer 10 Nom du tournoi`\n`!config tournoi liste`\n`!config tournoi info ID`\n`!config tournoi fermer ID`\n`!config tournoi ouvrir ID`\n`!config tournoi lancer ID`\n`!config tournoi inscrire ID`\n`!config tournoi desinscrire ID`",
         inline=False,
-    )
-    embed.set_footer(text="MK Arena • Commandes préfixe !")
+    )    embed.set_footer(text="MK Arena • Commandes préfixe !")
     await ctx.send(embed=embed)
 
 
@@ -292,14 +291,23 @@ async def unlock(ctx: commands.Context):
     await set_channel_lock(ctx, False)
 
 
-@bot.group(name="tournoi", invoke_without_command=True, description="Gestion des tournois CODM")
-async def tournoi(ctx: commands.Context):
+@bot.group(name="config", invoke_without_command=True, description="Configuration de MK Arena")
+async def config(ctx: commands.Context):
     await ctx.send(
-        "🏆 Commandes tournoi : `!tournoi creer <places> <nom>`, "
-        "`!tournoi liste`, `!tournoi info <ID>`, "
-        "`!tournoi fermer <ID>`, `!tournoi ouvrir <ID>`, `!tournoi lancer <ID>`."
+        "⚙️ Configuration MK Arena : `!config tournoi`. "
+        "Utilise `!aide` pour afficher les commandes disponibles."
     )
 
+
+@config.group(name="tournoi", invoke_without_command=True, description="Gestion des tournois CODM")
+async def tournoi(ctx: commands.Context):
+    await ctx.send(
+        "🏆 Commandes tournoi : `!config tournoi creer <places> <nom>`, "
+        "`!config tournoi liste`, `!config tournoi info <ID>`, "
+        "`!config tournoi fermer <ID>`, `!config tournoi ouvrir <ID>`, "
+        "`!config tournoi lancer <ID>`, `!config tournoi inscrire <ID>`, "
+        "`!config tournoi desinscrire <ID>`."
+    )
 
 @tournoi.command(name="creer", description="Crée un tournoi CODM")
 @commands.guild_only()
@@ -432,7 +440,7 @@ async def tournoi_lancer(ctx: commands.Context, tournament_id: int):
     await ctx.send(f"🚨 **{name}** démarre ! {count}/{maximum} participants inscrits. Les inscriptions sont maintenant fermées.")
 
 
-@bot.command(name="inscrire", description="S'inscrit à un tournoi CODM")
+@tournoi.command(name="inscrire", description="S'inscrit à un tournoi CODM")
 @commands.guild_only()
 async def tournoi_inscrire(ctx: commands.Context, tournament_id: int):
     with sqlite3.connect(DB_PATH) as connection:
@@ -465,7 +473,7 @@ async def tournoi_inscrire(ctx: commands.Context, tournament_id: int):
     await ctx.send(f"✅ {ctx.author.mention}, ton inscription à **{name}** est confirmée ! ({count + 1}/{maximum})")
 
 
-@bot.command(name="desinscrire", description="Se désinscrit d'un tournoi CODM")
+@tournoi.command(name="desinscrire", description="Se désinscrit d'un tournoi CODM")
 @commands.guild_only()
 async def tournoi_desinscrire(ctx: commands.Context, tournament_id: int):
     with sqlite3.connect(DB_PATH) as connection:
