@@ -36,6 +36,26 @@ def init_database():
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )"""
         )
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS tournaments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                max_players INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                creator_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )"""
+        )
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS tournament_registrations (
+                tournament_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                registered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (tournament_id, user_id),
+                FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE
+            )"""
+        )
 
 
 
@@ -77,6 +97,11 @@ async def aide(ctx: commands.Context):
     embed.add_field(
         name="Modération",
         value="`!clear 10`\n`!kick @membre raison`\n`!ban @membre raison`\n`!timeout @membre minutes raison`\n`!slowmode secondes`\n`!lock`\n`!unlock`\n`!warn @membre raison`\n`!warnings @membre`\n`!unwarn @membre ID`",
+        inline=False,
+    )
+    embed.add_field(
+        name="Tournois CODM",
+        value="`!tournoi creer 10 Nom du tournoi`\n`!tournoi liste`\n`!tournoi info ID`\n`!tournoi fermer ID`\n`!tournoi ouvrir ID`\n`!tournoi lancer ID`\n`!inscrire ID`\n`!desinscrire ID`",
         inline=False,
     )
     embed.set_footer(text="MK Arena • Commandes préfixe !")
@@ -265,6 +290,204 @@ async def lock(ctx: commands.Context):
 @commands.guild_only()
 async def unlock(ctx: commands.Context):
     await set_channel_lock(ctx, False)
+
+
+@bot.group(name="tournoi", invoke_without_command=True, description="Gestion des tournois CODM")
+async def tournoi(ctx: commands.Context):
+    await ctx.send(
+        "🏆 Commandes tournoi : `!tournoi creer <places> <nom>`, "
+        "`!tournoi liste`, `!tournoi info <ID>`, "
+        "`!tournoi fermer <ID>`, `!tournoi ouvrir <ID>`, `!tournoi lancer <ID>`."
+    )
+
+
+@tournoi.command(name="creer", description="Crée un tournoi CODM")
+@commands.guild_only()
+@commands.has_permissions(manage_guild=True)
+async def tournoi_creer(ctx: commands.Context, places: int, *, nom: str):
+    nom = nom.strip()
+    if not nom:
+        await ctx.send("❌ Donne un nom au tournoi.")
+        return
+    if places < 2 or places > 256:
+        await ctx.send("❌ Le nombre de places doit être compris entre 2 et 256.")
+        return
+    with sqlite3.connect(DB_PATH) as connection:
+        cursor = connection.execute(
+            "INSERT INTO tournaments (guild_id, name, max_players, creator_id) VALUES (?, ?, ?, ?)",
+            (ctx.guild.id, nom[:100], places, ctx.author.id),
+        )
+        tournament_id = cursor.lastrowid
+    embed = discord.Embed(
+        title=f"🏆 Tournoi CODM créé : {nom[:100]}",
+        description=f"ID : `{tournament_id}`\nPlaces : **{places}**\nStatut : 🟢 Inscriptions ouvertes",
+        color=discord.Color.green(),
+    )
+    embed.set_footer(text=f"Créé par {ctx.author}")
+    await ctx.send(embed=embed)
+
+
+@tournoi.command(name="liste", description="Liste les tournois CODM du serveur")
+@commands.guild_only()
+async def tournoi_liste(ctx: commands.Context):
+    with sqlite3.connect(DB_PATH) as connection:
+        rows = connection.execute(
+            """SELECT t.id, t.name, t.max_players, t.status, COUNT(r.user_id)
+               FROM tournaments t LEFT JOIN tournament_registrations r ON r.tournament_id = t.id
+               WHERE t.guild_id = ? GROUP BY t.id ORDER BY t.id DESC LIMIT 15""",
+            (ctx.guild.id,),
+        ).fetchall()
+    if not rows:
+        await ctx.send("🏆 Aucun tournoi enregistré sur ce serveur. Un administrateur peut en créer avec `!tournoi creer 10 Nom`.")
+        return
+    embed = discord.Embed(title="🏆 Tournois CODM", color=discord.Color.blurple())
+    status_names = {"open": "🟢 Inscriptions ouvertes", "closed": "🟠 Inscriptions fermées", "running": "🔴 En cours", "finished": "🏁 Terminé"}
+    for tid, name, maximum, status, count in rows:
+        embed.add_field(
+            name=f"#{tid} • {name}",
+            value=f"{status_names.get(status, status)}\n👥 {count}/{maximum} participants",
+            inline=False,
+        )
+    await ctx.send(embed=embed)
+
+
+@tournoi.command(name="info", description="Affiche les détails d'un tournoi")
+@commands.guild_only()
+async def tournoi_info(ctx: commands.Context, tournament_id: int):
+    with sqlite3.connect(DB_PATH) as connection:
+        row = connection.execute(
+            """SELECT t.name, t.max_players, t.status, t.creator_id, t.created_at, COUNT(r.user_id)
+               FROM tournaments t LEFT JOIN tournament_registrations r ON r.tournament_id = t.id
+               WHERE t.guild_id = ? AND t.id = ? GROUP BY t.id""",
+            (ctx.guild.id, tournament_id),
+        ).fetchone()
+        players = connection.execute(
+            """SELECT user_id FROM tournament_registrations WHERE tournament_id = ?
+               ORDER BY registered_at LIMIT 30""",
+            (tournament_id,),
+        ).fetchall() if row else []
+    if not row:
+        await ctx.send("❌ Tournoi introuvable sur ce serveur.")
+        return
+    name, maximum, status, creator_id, created_at, count = row
+    status_names = {"open": "🟢 Inscriptions ouvertes", "closed": "🟠 Inscriptions fermées", "running": "🔴 En cours", "finished": "🏁 Terminé"}
+    mentions = "\n".join(f"• <@{player_id}>" for (player_id,) in players) or "Aucun participant pour le moment."
+    embed = discord.Embed(title=f"🏆 {name}", color=discord.Color.blurple())
+    embed.add_field(name="ID", value=str(tournament_id), inline=True)
+    embed.add_field(name="Participants", value=f"{count}/{maximum}", inline=True)
+    embed.add_field(name="Statut", value=status_names.get(status, status), inline=True)
+    embed.add_field(name="Organisateur", value=f"<@{creator_id}>", inline=True)
+    embed.add_field(name="Créé le", value=created_at, inline=True)
+    embed.add_field(name="Inscrits", value=mentions[:1024], inline=False)
+    await ctx.send(embed=embed)
+
+
+@tournoi.command(name="fermer", description="Ferme les inscriptions d'un tournoi")
+@commands.guild_only()
+@commands.has_permissions(manage_guild=True)
+async def tournoi_fermer(ctx: commands.Context, tournament_id: int):
+    with sqlite3.connect(DB_PATH) as connection:
+        cursor = connection.execute(
+            "UPDATE tournaments SET status = 'closed' WHERE id = ? AND guild_id = ? AND status = 'open'",
+            (tournament_id, ctx.guild.id),
+        )
+    await ctx.send("🔒 Inscriptions fermées." if cursor.rowcount else "❌ Tournoi introuvable ou inscriptions déjà fermées.")
+
+
+@tournoi.command(name="ouvrir", description="Ouvre les inscriptions d'un tournoi")
+@commands.guild_only()
+@commands.has_permissions(manage_guild=True)
+async def tournoi_ouvrir(ctx: commands.Context, tournament_id: int):
+    with sqlite3.connect(DB_PATH) as connection:
+        cursor = connection.execute(
+            "UPDATE tournaments SET status = 'open' WHERE id = ? AND guild_id = ? AND status = 'closed'",
+            (tournament_id, ctx.guild.id),
+        )
+    await ctx.send("🔓 Inscriptions ouvertes." if cursor.rowcount else "❌ Tournoi introuvable ou impossible à rouvrir (il doit être fermé).")
+
+
+@tournoi.command(name="lancer", description="Lance un tournoi et ferme les inscriptions")
+@commands.guild_only()
+@commands.has_permissions(manage_guild=True)
+async def tournoi_lancer(ctx: commands.Context, tournament_id: int):
+    with sqlite3.connect(DB_PATH) as connection:
+        row = connection.execute(
+            """SELECT t.name, t.max_players, COUNT(r.user_id)
+               FROM tournaments t LEFT JOIN tournament_registrations r ON r.tournament_id = t.id
+               WHERE t.guild_id = ? AND t.id = ? AND t.status IN ('open', 'closed')
+               GROUP BY t.id""",
+            (ctx.guild.id, tournament_id),
+        ).fetchone()
+        if not row:
+            await ctx.send("❌ Tournoi introuvable ou déjà lancé.")
+            return
+        name, maximum, count = row
+        if count < 2:
+            await ctx.send("❌ Il faut au moins 2 participants inscrits pour lancer le tournoi.")
+            return
+        connection.execute(
+            "UPDATE tournaments SET status = 'running' WHERE id = ? AND guild_id = ?",
+            (tournament_id, ctx.guild.id),
+        )
+    await ctx.send(f"🚨 **{name}** démarre ! {count}/{maximum} participants inscrits. Les inscriptions sont maintenant fermées.")
+
+
+@bot.command(name="inscrire", description="S'inscrit à un tournoi CODM")
+@commands.guild_only()
+async def tournoi_inscrire(ctx: commands.Context, tournament_id: int):
+    with sqlite3.connect(DB_PATH) as connection:
+        row = connection.execute(
+            "SELECT name, max_players, status FROM tournaments WHERE id = ? AND guild_id = ?",
+            (tournament_id, ctx.guild.id),
+        ).fetchone()
+        if not row:
+            await ctx.send("❌ Tournoi introuvable sur ce serveur.")
+            return
+        name, maximum, status = row
+        if status != "open":
+            await ctx.send("❌ Les inscriptions à ce tournoi ne sont pas ouvertes.")
+            return
+        count = connection.execute(
+            "SELECT COUNT(*) FROM tournament_registrations WHERE tournament_id = ?",
+            (tournament_id,),
+        ).fetchone()[0]
+        if count >= maximum:
+            await ctx.send("❌ Ce tournoi affiche complet.")
+            return
+        try:
+            connection.execute(
+                "INSERT INTO tournament_registrations (tournament_id, user_id) VALUES (?, ?)",
+                (tournament_id, ctx.author.id),
+            )
+        except sqlite3.IntegrityError:
+            await ctx.send("ℹ️ Tu es déjà inscrit à ce tournoi.")
+            return
+    await ctx.send(f"✅ {ctx.author.mention}, ton inscription à **{name}** est confirmée ! ({count + 1}/{maximum})")
+
+
+@bot.command(name="desinscrire", description="Se désinscrit d'un tournoi CODM")
+@commands.guild_only()
+async def tournoi_desinscrire(ctx: commands.Context, tournament_id: int):
+    with sqlite3.connect(DB_PATH) as connection:
+        row = connection.execute(
+            "SELECT name, status FROM tournaments WHERE id = ? AND guild_id = ?",
+            (tournament_id, ctx.guild.id),
+        ).fetchone()
+        if not row:
+            await ctx.send("❌ Tournoi introuvable sur ce serveur.")
+            return
+        name, status = row
+        if status != "open":
+            await ctx.send("❌ Tu peux te désinscrire uniquement tant que les inscriptions sont ouvertes.")
+            return
+        cursor = connection.execute(
+            "DELETE FROM tournament_registrations WHERE tournament_id = ? AND user_id = ?",
+            (tournament_id, ctx.author.id),
+        )
+    if cursor.rowcount:
+        await ctx.send(f"✅ Tu es désinscrit de **{name}**.")
+    else:
+        await ctx.send("ℹ️ Tu n'étais pas inscrit à ce tournoi.")
 
 
 @bot.event
