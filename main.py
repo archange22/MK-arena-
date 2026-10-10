@@ -21,6 +21,7 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 database_ready = False
+slash_commands_synced = False
 
 
 def init_database():
@@ -73,11 +74,18 @@ def init_database():
 
 @bot.event
 async def on_ready():
-    global database_ready
+    global database_ready, slash_commands_synced
     if not database_ready:
         init_database()
         database_ready = True
         log.info("Base SQLite initialisée : %s", DB_PATH)
+    if not slash_commands_synced:
+        try:
+            synced = await bot.tree.sync()
+            slash_commands_synced = True
+            log.info("%s commande(s) slash synchronisée(s).", len(synced))
+        except discord.HTTPException:
+            log.exception("Impossible de synchroniser les commandes slash.")
     log.info(
         "MK Arena connected as %s (ID: %s) in %s server(s)",
         bot.user,
@@ -500,6 +508,24 @@ async def tournoi_panel(ctx: commands.Context):
     view = TournamentConfigPanel(ctx.guild.id)
     embed = await build_tournament_panel_embed(ctx.guild.id, view.selected_key)
     await ctx.send(embed=embed, view=view)
+
+
+@bot.tree.command(name="config", description="Ouvre le panel interactif de configuration MK Arena")
+async def slash_config(interaction: discord.Interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "❌ Utilise cette commande dans un serveur Discord.",
+            ephemeral=True,
+        )
+        return
+    view = TournamentConfigPanel(interaction.guild.id)
+    embed = await build_tournament_panel_embed(interaction.guild.id, view.selected_key)
+    await interaction.response.send_message(
+        content="⚙️ **Panel de configuration MK Arena**",
+        embed=embed,
+        view=view,
+        ephemeral=True,
+    )
 
 
 @tournoi.command(name="format", description="Configure les informations d'un format")
