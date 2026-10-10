@@ -1,6 +1,7 @@
 import os
 import logging
 import sqlite3
+import time
 from datetime import timedelta
 
 import discord
@@ -22,6 +23,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 database_ready = False
 slash_commands_synced = False
+persistent_views_registered = False
 
 
 def init_database():
@@ -69,6 +71,18 @@ def init_database():
                 PRIMARY KEY (guild_id, format_key)
             )"""
         )
+        connection.execute("""CREATE TABLE IF NOT EXISTS guild_settings (
+            guild_id INTEGER PRIMARY KEY, welcome_channel_id INTEGER, log_channel_id INTEGER,
+            welcome_enabled INTEGER NOT NULL DEFAULT 1, xp_enabled INTEGER NOT NULL DEFAULT 1,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
+        connection.execute("""CREATE TABLE IF NOT EXISTS user_xp (
+            guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL, xp INTEGER NOT NULL DEFAULT 0,
+            level INTEGER NOT NULL DEFAULT 0, last_message_at REAL NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id))""")
+        connection.execute("""CREATE TABLE IF NOT EXISTS tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'open',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
 
 
 
@@ -86,6 +100,11 @@ async def on_ready():
             log.info("%s commande(s) slash synchronisée(s).", len(synced))
         except discord.HTTPException:
             log.exception("Impossible de synchroniser les commandes slash.")
+    global persistent_views_registered
+    if not persistent_views_registered:
+        bot.add_view(TicketPanelView())
+        bot.add_view(TicketCloseView())
+        persistent_views_registered = True
     log.info(
         "MK Arena connected as %s (ID: %s) in %s server(s)",
         bot.user,
@@ -517,6 +536,7 @@ def build_main_panel_embed(guild: discord.Guild):
     embed.add_field(name="🛡️ Modération", value="Outils de sécurité et sanctions", inline=True)
     embed.add_field(name="👥 Communauté", value="Fonctions communautaires à développer", inline=True)
     embed.add_field(name="📊 Statistiques", value="Vue d'ensemble du serveur", inline=True)
+    embed.add_field(name="🎫 Support", value="Tickets privés pour les membres", inline=True)
     if guild.icon:
         embed.set_thumbnail(url=guild.icon.url)
     embed.set_footer(text="MK Arena • V1 • Utilise les boutons pour naviguer")
@@ -530,16 +550,19 @@ async def build_main_section_embed(guild: discord.Guild, section: str):
         "moderation": "🛡️ Centre de modération",
         "community": "👥 Communauté",
         "stats": "📊 Statistiques du serveur",
+        "support": "🎫 Support et tickets",
     }
     embed = discord.Embed(title=titles[section], color=discord.Color.from_rgb(111, 66, 193))
     if section == "config":
+        welcome_id, log_id, welcome_enabled, xp_enabled = get_guild_settings(guild.id)
         embed.description = (
-            "Les réglages disponibles dans cette version :\n"
-            "• Formats et règles des tournois via le sous-panel Tournois.\n"
-            "• Les commandes existantes restent utilisables avec le préfixe !.\n\n"
-            "**Prochaine extension :** salons de bienvenue, logs, rôles automatiques et messages personnalisés."
+            "Salon accueil : " + (f"<#{welcome_id}>" if welcome_id else "Non configuré") + "\n"
+            "Salon logs : " + (f"<#{log_id}>" if log_id else "Non configuré") + "\n"
+            "Bienvenue : " + ("Activé" if welcome_enabled else "Désactivé") + "\n"
+            "XP : " + ("Activé" if xp_enabled else "Désactivé") + "\n\n"
+            "Les boutons de cette page définissent le salon actuel et activent ou désactivent les fonctions."
         )
-        embed.add_field(name="Commande utile", value="!config tournoi panel", inline=False)
+        embed.add_field(name="Commandes utiles", value="!ticketpanel : publier le panneau de tickets\n!config tournoi panel : configurer les tournois", inline=False)
     elif section == "moderation":
         embed.description = (
             "Les commandes de modération déjà disponibles :\n"
@@ -554,10 +577,15 @@ async def build_main_section_embed(guild: discord.Guild, section: str):
         )
         embed.set_footer(text="Les permissions Discord requises sont vérifiées par le bot.")
     elif section == "community":
-        embed.description = (
-            "Cette section est préparée dans le panel, mais ses systèmes ne sont pas encore activés.\n\n"
-            "À développer : XP et niveaux, classement, messages de bienvenue, rôles automatiques et récompenses."
-        )
+        with sqlite3.connect(DB_PATH) as connection:
+            total_xp = connection.execute("SELECT COALESCE(SUM(xp), 0) FROM user_xp WHERE guild_id = ?", (guild.id,)).fetchone()[0]
+            tracked_users = connection.execute("SELECT COUNT(*) FROM user_xp WHERE guild_id = ?", (guild.id,)).fetchone()[0]
+        embed.description = "XP communautaire actif : les membres gagnent 5 XP par minute d'activité éligible."
+        embed.add_field(name="Membres suivis", value=str(tracked_users), inline=True)
+        embed.add_field(name="XP distribuée", value=str(total_xp), inline=True)
+        embed.add_field(name="Commandes", value="!profil [membre]\n!classement", inline=False)
+    elif section == "support":
+        embed.description = "Ouvre un ticket privé avec le bouton ci-dessous. Un seul ticket ouvert par membre est autorisé."
     elif section == "stats":
         with sqlite3.connect(DB_PATH) as connection:
             tournament_count = connection.execute(
@@ -600,6 +628,10 @@ class MKArenaSectionPanel(discord.ui.View):
             view=MKArenaHomePanel(self.guild_id),
         )
 
+    @discord.ui.button(label="Créer un ticket", style=discord.ButtonStyle.success, emoji="🎫", row=1)
+    async def create_ticket_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Pour publier le panneau de tickets dans un salon, un administrateur peut utiliser !ticketpanel.", ephemeral=True)
+
     @discord.ui.button(label="Actualiser", style=discord.ButtonStyle.primary, emoji="🔄", row=0)
     async def refresh_section(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild is None:
@@ -638,7 +670,7 @@ class MKArenaHomePanel(discord.ui.View):
         await interaction.response.edit_message(
             content=None,
             embed=await build_main_section_embed(interaction.guild, section),
-            view=MKArenaSectionPanel(self.guild_id, section),
+            view=ServerSettingsPanel(self.guild_id) if section == "config" else (SupportPanelView(self.guild_id) if section == "support" else MKArenaSectionPanel(self.guild_id, section)),
         )
 
     @discord.ui.button(label="Configuration", style=discord.ButtonStyle.secondary, emoji="⚙️", row=0)
@@ -661,6 +693,10 @@ class MKArenaHomePanel(discord.ui.View):
     async def open_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.open_section(interaction, "stats")
 
+    @discord.ui.button(label="Support / Tickets", style=discord.ButtonStyle.primary, emoji="🎫", row=2)
+    async def open_support(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.open_section(interaction, "support")
+
     @discord.ui.button(label="Actualiser", style=discord.ButtonStyle.success, emoji="🔄", row=2)
     async def refresh_home(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild is None:
@@ -671,6 +707,286 @@ class MKArenaHomePanel(discord.ui.View):
             embed=build_main_panel_embed(interaction.guild),
             view=self,
         )
+
+
+
+def get_guild_settings(guild_id: int):
+    with sqlite3.connect(DB_PATH) as connection:
+        row = connection.execute(
+            "SELECT welcome_channel_id, log_channel_id, welcome_enabled, xp_enabled FROM guild_settings WHERE guild_id = ?",
+            (guild_id,),
+        ).fetchone()
+    return row or (None, None, 1, 1)
+
+
+def update_guild_setting(guild_id: int, key: str, value):
+    allowed = {"welcome_channel_id", "log_channel_id", "welcome_enabled", "xp_enabled"}
+    if key not in allowed:
+        raise ValueError("Réglage non autorisé")
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.execute("INSERT OR IGNORE INTO guild_settings (guild_id) VALUES (?)", (guild_id,))
+        connection.execute(
+            "UPDATE guild_settings SET " + key + " = ?, updated_at = CURRENT_TIMESTAMP WHERE guild_id = ?",
+            (value, guild_id),
+        )
+
+
+async def send_configured_log(guild: discord.Guild, message: str):
+    _, log_channel_id, _, _ = get_guild_settings(guild.id)
+    channel = guild.get_channel(log_channel_id) if log_channel_id else None
+    if isinstance(channel, discord.TextChannel):
+        try:
+            await channel.send(message[:1900])
+        except discord.DiscordException:
+            log.exception("Impossible d'envoyer un log dans le serveur %s", guild.id)
+
+
+class ServerSettingsPanel(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=900)
+        self.guild_id = guild_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message("Ce panel appartient à un autre serveur.", ephemeral=True)
+            return False
+        if not isinstance(interaction.user, discord.Member) or not interaction.user.guild_permissions.manage_guild:
+            await interaction.response.send_message("La permission Gérer le serveur est nécessaire.", ephemeral=True)
+            return False
+        return True
+
+    async def refresh_panel(self, interaction: discord.Interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message("Utilise ce panel dans un serveur.", ephemeral=True)
+            return
+        welcome_id, log_id, welcome_enabled, xp_enabled = get_guild_settings(self.guild_id)
+        embed = discord.Embed(title="Configuration MK Arena", color=discord.Color.blurple())
+        embed.description = (
+            "Salon accueil : " + (f"<#{welcome_id}>" if welcome_id else "Non configuré") + "\n"
+            "Salon logs : " + (f"<#{log_id}>" if log_id else "Non configuré") + "\n"
+            "Bienvenue automatique : " + ("Activé" if welcome_enabled else "Désactivé") + "\n"
+            "XP communautaire : " + ("Activé" if xp_enabled else "Désactivé") + "\n\n"
+            "Les boutons Accueil et Logs utilisent le salon dans lequel ce panel a été envoyé."
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Accueil ici", style=discord.ButtonStyle.primary, emoji="👋", row=0)
+    async def set_welcome(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not isinstance(interaction.channel, discord.TextChannel):
+            await interaction.response.send_message("Choisis un salon textuel.", ephemeral=True)
+            return
+        update_guild_setting(self.guild_id, "welcome_channel_id", interaction.channel.id)
+        await self.refresh_panel(interaction)
+
+    @discord.ui.button(label="Logs ici", style=discord.ButtonStyle.primary, emoji="📋", row=0)
+    async def set_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not isinstance(interaction.channel, discord.TextChannel):
+            await interaction.response.send_message("Choisis un salon textuel.", ephemeral=True)
+            return
+        update_guild_setting(self.guild_id, "log_channel_id", interaction.channel.id)
+        await self.refresh_panel(interaction)
+
+    @discord.ui.button(label="Accueil ON/OFF", style=discord.ButtonStyle.secondary, emoji="🔔", row=1)
+    async def toggle_welcome(self, interaction: discord.Interaction, button: discord.ui.Button):
+        _, _, enabled, _ = get_guild_settings(self.guild_id)
+        update_guild_setting(self.guild_id, "welcome_enabled", 0 if enabled else 1)
+        await self.refresh_panel(interaction)
+
+    @discord.ui.button(label="XP ON/OFF", style=discord.ButtonStyle.secondary, emoji="⭐", row=1)
+    async def toggle_xp(self, interaction: discord.Interaction, button: discord.ui.Button):
+        _, _, _, enabled = get_guild_settings(self.guild_id)
+        update_guild_setting(self.guild_id, "xp_enabled", 0 if enabled else 1)
+        await self.refresh_panel(interaction)
+
+    @discord.ui.button(label="Retour", style=discord.ButtonStyle.success, emoji="🏠", row=2)
+    async def go_back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.guild is None:
+            await interaction.response.send_message("Utilise ce panel dans un serveur.", ephemeral=True)
+            return
+        await interaction.response.edit_message(embed=build_main_panel_embed(interaction.guild), view=MKArenaHomePanel(self.guild_id))
+
+
+class TicketPanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Créer un ticket privé", style=discord.ButtonStyle.success, emoji="🎫", custom_id="mk_arena_ticket_create")
+    async def create_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        if guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("Utilise ce bouton dans un serveur.", ephemeral=True)
+            return
+        with sqlite3.connect(DB_PATH) as connection:
+            row = connection.execute(
+                "SELECT channel_id FROM tickets WHERE guild_id = ? AND user_id = ? AND status = 'open' ORDER BY id DESC LIMIT 1",
+                (guild.id, interaction.user.id),
+            ).fetchone()
+        if row:
+            existing = guild.get_channel(row[0])
+            if existing:
+                await interaction.response.send_message(f"Tu as déjà un ticket ouvert : {existing.mention}", ephemeral=True)
+                return
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=True, embed_links=True),
+        }
+        if guild.me:
+            overwrites[guild.me] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True)
+        try:
+            channel = await guild.create_text_channel(
+                name=("ticket-" + interaction.user.name).lower().replace(" ", "-")[:90],
+                overwrites=overwrites,
+                topic=f"MKARENA_TICKET_OWNER={interaction.user.id}",
+                reason=f"Ticket MK Arena ouvert par {interaction.user}",
+            )
+            with sqlite3.connect(DB_PATH) as connection:
+                connection.execute(
+                    "INSERT INTO tickets (guild_id, user_id, channel_id, status) VALUES (?, ?, ?, 'open')",
+                    (guild.id, interaction.user.id, channel.id),
+                )
+            await channel.send(
+                f"🎫 Bonjour {interaction.user.mention}. Décris ton besoin ici. L'équipe autorisée pourra intervenir.",
+                view=TicketCloseView(),
+            )
+            await interaction.response.send_message(f"Ticket créé : {channel.mention}", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message("Il me manque la permission Gérer les salons.", ephemeral=True)
+        except discord.DiscordException:
+            log.exception("Création de ticket impossible")
+            await interaction.response.send_message("Impossible de créer le ticket pour le moment.", ephemeral=True)
+
+
+class TicketCloseView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Fermer le ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="mk_arena_ticket_close")
+    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        channel = interaction.channel
+        if not isinstance(channel, discord.TextChannel) or not channel.topic or "MKARENA_TICKET_OWNER=" not in channel.topic:
+            await interaction.response.send_message("Ce salon n'est pas un ticket MK Arena.", ephemeral=True)
+            return
+        owner_id = channel.topic.split("MKARENA_TICKET_OWNER=", 1)[1].split()[0]
+        is_owner = str(interaction.user.id) == owner_id
+        is_staff = isinstance(interaction.user, discord.Member) and (
+            interaction.user.guild_permissions.manage_channels or interaction.user.guild_permissions.administrator
+        )
+        if not is_owner and not is_staff:
+            await interaction.response.send_message("Seul l'auteur du ticket ou un membre du staff autorisé peut le fermer.", ephemeral=True)
+            return
+        with sqlite3.connect(DB_PATH) as connection:
+            connection.execute(
+                "UPDATE tickets SET status = 'closed' WHERE guild_id = ? AND channel_id = ? AND status = 'open'",
+                (channel.guild.id, channel.id),
+            )
+        owner = channel.guild.get_member(int(owner_id))
+        if owner:
+            try:
+                await channel.set_permissions(owner, send_messages=False)
+            except discord.DiscordException:
+                pass
+        try:
+            await channel.edit(name=("ferme-" + channel.name)[:100])
+        except discord.DiscordException:
+            pass
+        await interaction.response.send_message(f"Ticket fermé par {interaction.user.mention}. Le salon est conservé pour l'équipe.")
+
+
+@bot.command(name="ticketpanel", description="Publie le panneau de création de tickets")
+@commands.guild_only()
+@commands.has_permissions(manage_guild=True)
+async def ticketpanel(ctx: commands.Context):
+    embed = discord.Embed(
+        title="🎫 Support MK Arena",
+        description="Besoin d'aide ? Clique ci-dessous pour créer un salon privé avec l'équipe. Un seul ticket ouvert par membre.",
+        color=discord.Color.blurple(),
+    )
+    await ctx.send(embed=embed, view=TicketPanelView())
+
+
+@bot.command(name="profil", description="Affiche le profil XP d'un membre")
+@commands.guild_only()
+async def profil(ctx: commands.Context, membre: discord.Member = None):
+    membre = membre or ctx.author
+    with sqlite3.connect(DB_PATH) as connection:
+        row = connection.execute(
+            "SELECT xp, level FROM user_xp WHERE guild_id = ? AND user_id = ?",
+            (ctx.guild.id, membre.id),
+        ).fetchone()
+    xp, level = row if row else (0, 0)
+    embed = discord.Embed(title=f"Profil communautaire • {membre.display_name}", color=discord.Color.blurple())
+    embed.set_thumbnail(url=membre.display_avatar.url)
+    embed.add_field(name="Niveau", value=str(level), inline=True)
+    embed.add_field(name="XP", value=str(xp), inline=True)
+    embed.add_field(name="Prochain niveau", value=f"{max(0, (level + 1) * 100 - xp)} XP", inline=True)
+    await ctx.send(embed=embed)
+
+
+@bot.command(name="classement", description="Affiche le classement XP du serveur")
+@commands.guild_only()
+async def classement(ctx: commands.Context):
+    with sqlite3.connect(DB_PATH) as connection:
+        rows = connection.execute(
+            "SELECT user_id, xp, level FROM user_xp WHERE guild_id = ? ORDER BY xp DESC LIMIT 10",
+            (ctx.guild.id,),
+        ).fetchall()
+    embed = discord.Embed(title="Classement MK Arena", color=discord.Color.gold())
+    embed.description = "\n".join(
+        f"{index}. <@{user_id}> • Niveau {level} • {xp} XP"
+        for index, (user_id, xp, level) in enumerate(rows, start=1)
+    ) if rows else "Aucune XP enregistrée pour le moment."
+    await ctx.send(embed=embed)
+
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    welcome_id, _, welcome_enabled, _ = get_guild_settings(member.guild.id)
+    if welcome_enabled and welcome_id:
+        channel = member.guild.get_channel(welcome_id)
+        if isinstance(channel, discord.TextChannel):
+            try:
+                await channel.send(f"👋 Bienvenue {member.mention} sur **{member.guild.name}** ! Tu es le membre n°{member.guild.member_count or '?'} 🎮")
+            except discord.DiscordException:
+                log.exception("Message de bienvenue impossible")
+    await send_configured_log(member.guild, f"📥 Arrivée : {member.mention} ({member.id})")
+
+
+@bot.event
+async def on_member_remove(member: discord.Member):
+    await send_configured_log(member.guild, f"📤 Départ : {member} ({member.id})")
+
+
+@bot.event
+async def on_message_delete(message: discord.Message):
+    if message.guild and not message.author.bot:
+        content = (message.content or "[message sans texte]")[:700]
+        await send_configured_log(message.guild, f"🗑️ Message supprimé dans {message.channel.mention} par {message.author.mention} : {content}")
+
+
+@bot.event
+async def on_message(message: discord.Message):
+    if message.guild and not message.author.bot:
+        _, _, _, xp_enabled = get_guild_settings(message.guild.id)
+        if xp_enabled:
+            now = time.time()
+            with sqlite3.connect(DB_PATH) as connection:
+                row = connection.execute(
+                    "SELECT xp, level, last_message_at FROM user_xp WHERE guild_id = ? AND user_id = ?",
+                    (message.guild.id, message.author.id),
+                ).fetchone()
+                if not row:
+                    connection.execute(
+                        "INSERT INTO user_xp (guild_id, user_id, xp, level, last_message_at) VALUES (?, ?, 5, 0, ?)",
+                        (message.guild.id, message.author.id, now),
+                    )
+                elif now - row[2] >= 60:
+                    xp = row[0] + 5
+                    level = int((xp / 100) ** 0.5)
+                    connection.execute(
+                        "UPDATE user_xp SET xp = ?, level = ?, last_message_at = ? WHERE guild_id = ? AND user_id = ?",
+                        (xp, level, now, message.guild.id, message.author.id),
+                    )
+    await bot.process_commands(message)
 
 
 @bot.command(name="panel", description="Ouvre le centre de contrôle MK Arena")
