@@ -71,7 +71,7 @@ async def aide(ctx: commands.Context):
     )
     embed.add_field(
         name="Général",
-        value="`!ping`\n`!aide`\n`!serveur`\n`!userinfo [membre]`\n`!avatar [membre]`\n`!warnings @membre`",
+        value="`!ping`\n`!aide`\n`!serveur`\n`!userinfo [membre]`\n`!avatar [membre]`",
         inline=False,
     )
     embed.add_field(
@@ -102,7 +102,7 @@ async def warn(ctx: commands.Context, membre: discord.Member, *, raison: str = N
             (ctx.guild.id, membre.id, ctx.author.id, raison.strip()),
         )
         warning_id = cursor.lastrowid
-    await ctx.send(f"⚠️ {membre.mention a reçu un avertissement. ID : `{warning_id}`. Raison : {raison}")
+    await ctx.send(f"⚠️ {membre.mention} a reçu un avertissement. ID : `{warning_id}`. Raison : {raison}")
 
 
 @bot.command(name="warnings", description="Affiche les avertissements d'un membre")
