@@ -103,7 +103,8 @@ async def aide(ctx: commands.Context):
         name="Configuration • Tournois CODM",
         value="`!config tournoi creer 10 Nom du tournoi`\n`!config tournoi liste`\n`!config tournoi info ID`\n`!config tournoi fermer ID`\n`!config tournoi ouvrir ID`\n`!config tournoi lancer ID`\n`!config tournoi inscrire ID`\n`!config tournoi desinscrire ID`",
         inline=False,
-    )    embed.set_footer(text="MK Arena • Commandes préfixe !")
+    )
+    embed.set_footer(text="MK Arena • Commandes préfixe !")
     await ctx.send(embed=embed)
 
 
