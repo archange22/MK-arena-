@@ -121,7 +121,7 @@ async def aide(ctx: commands.Context):
     )
     embed.add_field(
         name="Configuration • Tournois CODM",
-        value="`!config tournoi panel`\n`!config tournoi format bo3_5v5 Infos...`\n`!config tournoi regles bo3_5v5 Regles...`\n`!config tournoi creer 10 Nom du tournoi`\n`!config tournoi liste`\n`!config tournoi info ID`\n`!config tournoi fermer ID`\n`!config tournoi ouvrir ID`\n`!config tournoi lancer ID`\n`!config tournoi inscrire ID`\n`!config tournoi desinscrire ID`",
+        value="`!panel`\n`!config panel`\n`!config tournoi panel`\n`!config tournoi format bo3_5v5 Infos...`\n`!config tournoi regles bo3_5v5 Regles...`\n`!config tournoi creer 10 Nom du tournoi`\n`!config tournoi liste`\n`!config tournoi info ID`\n`!config tournoi fermer ID`\n`!config tournoi ouvrir ID`\n`!config tournoi lancer ID`\n`!config tournoi inscrire ID`\n`!config tournoi desinscrire ID`",
         inline=False,
     )
     embed.set_footer(text="MK Arena • Commandes préfixe !")
@@ -502,6 +502,187 @@ class TournamentConfigPanel(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
 
 
+
+def build_main_panel_embed(guild: discord.Guild):
+    embed = discord.Embed(
+        title="⚔️ MK ARENA • Centre de contrôle",
+        description=(
+            f"Bienvenue dans le panneau d'administration de **{guild.name}**.\\n"
+            "Choisis une catégorie avec les boutons ci-dessous. Les réglages sensibles restent réservés aux administrateurs."
+        ),
+        color=discord.Color.from_rgb(111, 66, 193),
+    )
+    embed.add_field(name="⚙️ Configuration", value="Réglages disponibles et commandes du serveur", inline=True)
+    embed.add_field(name="🏆 Tournois CODM", value="Formats, règles et inscriptions", inline=True)
+    embed.add_field(name="🛡️ Modération", value="Outils de sécurité et sanctions", inline=True)
+    embed.add_field(name="👥 Communauté", value="Fonctions communautaires à développer", inline=True)
+    embed.add_field(name="📊 Statistiques", value="Vue d'ensemble du serveur", inline=True)
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+    embed.set_footer(text="MK Arena • V1 • Utilise les boutons pour naviguer")
+    return embed
+
+
+async def build_main_section_embed(guild: discord.Guild, section: str):
+    titles = {
+        "config": "⚙️ Configuration du serveur",
+        "tournaments": "🏆 Centre des tournois CODM",
+        "moderation": "🛡️ Centre de modération",
+        "community": "👥 Communauté",
+        "stats": "📊 Statistiques du serveur",
+    }
+    embed = discord.Embed(title=titles[section], color=discord.Color.from_rgb(111, 66, 193))
+    if section == "config":
+        embed.description = (
+            "Les réglages disponibles dans cette version :\\n"
+            "• Formats et règles des tournois via le sous-panel Tournois.\\n"
+            "• Les commandes existantes restent utilisables avec le préfixe !.\\n\\n"
+            "**Prochaine extension :** salons de bienvenue, logs, rôles automatiques et messages personnalisés."
+        )
+        embed.add_field(name="Commande utile", value="!config tournoi panel", inline=False)
+    elif section == "moderation":
+        embed.description = (
+            "Les commandes de modération déjà disponibles :\\n"
+            "!clear 10 • supprimer des messages\\n"
+            "!warn @membre raison • avertir\\n"
+            "!warnings @membre • consulter les avertissements\\n"
+            "!unwarn @membre ID • retirer un avertissement\\n"
+            "!kick @membre raison • expulser\\n"
+            "!ban @membre raison • bannir\\n"
+            "!timeout @membre minutes raison • timeout\\n"
+            "!slowmode secondes, !lock, !unlock"
+        )
+        embed.set_footer(text="Les permissions Discord requises sont vérifiées par le bot.")
+    elif section == "community":
+        embed.description = (
+            "Cette section est préparée dans le panel, mais ses systèmes ne sont pas encore activés.\\n\\n"
+            "À développer : XP et niveaux, classement, messages de bienvenue, rôles automatiques et récompenses."
+        )
+    elif section == "stats":
+        with sqlite3.connect(DB_PATH) as connection:
+            tournament_count = connection.execute(
+                "SELECT COUNT(*) FROM tournaments WHERE guild_id = ?", (guild.id,)
+            ).fetchone()[0]
+            warning_count = connection.execute(
+                "SELECT COUNT(*) FROM warnings WHERE guild_id = ?", (guild.id,)
+            ).fetchone()[0]
+        embed.description = "Aperçu calculé à partir des données locales de MK Arena."
+        embed.add_field(name="👥 Membres", value=str(guild.member_count or "Inconnu"), inline=True)
+        embed.add_field(name="💬 Salons", value=str(len(guild.channels)), inline=True)
+        embed.add_field(name="🏆 Tournois enregistrés", value=str(tournament_count), inline=True)
+        embed.add_field(name="⚠️ Avertissements enregistrés", value=str(warning_count), inline=True)
+    else:
+        embed.description = "Choisis une section du panel principal."
+    embed.set_footer(text="MK Arena • V1")
+    return embed
+
+
+class MKArenaSectionPanel(discord.ui.View):
+    def __init__(self, guild_id: int, section: str):
+        super().__init__(timeout=900)
+        self.guild_id = guild_id
+        self.section = section
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message("❌ Ce panel appartient à un autre serveur.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Retour à l'accueil", style=discord.ButtonStyle.secondary, emoji="🏠", row=0)
+    async def back_home(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.guild is None:
+            await interaction.response.send_message("❌ Utilise ce panel dans un serveur.", ephemeral=True)
+            return
+        await interaction.response.edit_message(
+            content="⚔️ **MK Arena • Centre de contrôle**",
+            embed=build_main_panel_embed(interaction.guild),
+            view=MKArenaHomePanel(self.guild_id),
+        )
+
+    @discord.ui.button(label="Actualiser", style=discord.ButtonStyle.primary, emoji="🔄", row=0)
+    async def refresh_section(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.guild is None:
+            await interaction.response.send_message("❌ Utilise ce panel dans un serveur.", ephemeral=True)
+            return
+        await interaction.response.edit_message(
+            embed=await build_main_section_embed(interaction.guild, self.section),
+            view=self,
+        )
+
+
+class MKArenaHomePanel(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=900)
+        self.guild_id = guild_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.guild_id != self.guild_id:
+            await interaction.response.send_message("❌ Ce panel appartient à un autre serveur.", ephemeral=True)
+            return False
+        return True
+
+    async def open_section(self, interaction: discord.Interaction, section: str):
+        if interaction.guild is None:
+            await interaction.response.send_message("❌ Utilise ce panel dans un serveur.", ephemeral=True)
+            return
+        if section == "tournaments":
+            view = TournamentConfigPanel(self.guild_id)
+            embed = await build_tournament_panel_embed(self.guild_id, view.selected_key)
+            await interaction.response.edit_message(
+                content="🏆 **MK Arena • Centre des tournois**",
+                embed=embed,
+                view=view,
+            )
+            return
+        await interaction.response.edit_message(
+            content=None,
+            embed=await build_main_section_embed(interaction.guild, section),
+            view=MKArenaSectionPanel(self.guild_id, section),
+        )
+
+    @discord.ui.button(label="Configuration", style=discord.ButtonStyle.secondary, emoji="⚙️", row=0)
+    async def open_config(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.open_section(interaction, "config")
+
+    @discord.ui.button(label="Tournois CODM", style=discord.ButtonStyle.primary, emoji="🏆", row=0)
+    async def open_tournaments(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.open_section(interaction, "tournaments")
+
+    @discord.ui.button(label="Modération", style=discord.ButtonStyle.secondary, emoji="🛡️", row=1)
+    async def open_moderation(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.open_section(interaction, "moderation")
+
+    @discord.ui.button(label="Communauté", style=discord.ButtonStyle.secondary, emoji="👥", row=1)
+    async def open_community(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.open_section(interaction, "community")
+
+    @discord.ui.button(label="Statistiques", style=discord.ButtonStyle.secondary, emoji="📊", row=1)
+    async def open_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.open_section(interaction, "stats")
+
+    @discord.ui.button(label="Actualiser", style=discord.ButtonStyle.success, emoji="🔄", row=2)
+    async def refresh_home(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.guild is None:
+            await interaction.response.send_message("❌ Utilise ce panel dans un serveur.", ephemeral=True)
+            return
+        await interaction.response.edit_message(
+            content="⚔️ **MK Arena • Centre de contrôle**",
+            embed=build_main_panel_embed(interaction.guild),
+            view=self,
+        )
+
+
+@bot.command(name="panel", description="Ouvre le centre de contrôle MK Arena")
+@commands.guild_only()
+async def panel(ctx: commands.Context):
+    await ctx.send(
+        content="⚔️ **MK Arena • Centre de contrôle**",
+        embed=build_main_panel_embed(ctx.guild),
+        view=MKArenaHomePanel(ctx.guild.id),
+    )
+
+
 @tournoi.command(name="panel", description="Ouvre le panel interactif des tournois CODM")
 @commands.guild_only()
 async def tournoi_panel(ctx: commands.Context):
@@ -513,9 +694,11 @@ async def tournoi_panel(ctx: commands.Context):
 @config.command(name="panel", description="Ouvre le panel de configuration MK Arena")
 @commands.guild_only()
 async def config_panel(ctx: commands.Context):
-    view = TournamentConfigPanel(ctx.guild.id)
-    embed = await build_tournament_panel_embed(ctx.guild.id, view.selected_key)
-    await ctx.send(content="⚙️ **Panel de configuration MK Arena**", embed=embed, view=view)
+    await ctx.send(
+        content="⚔️ **MK Arena • Centre de contrôle**",
+        embed=build_main_panel_embed(ctx.guild),
+        view=MKArenaHomePanel(ctx.guild.id),
+    )
 
 
 @bot.tree.command(name="config", description="Ouvre le panel interactif de configuration MK Arena")
@@ -526,12 +709,10 @@ async def slash_config(interaction: discord.Interaction):
             ephemeral=True,
         )
         return
-    view = TournamentConfigPanel(interaction.guild.id)
-    embed = await build_tournament_panel_embed(interaction.guild.id, view.selected_key)
     await interaction.response.send_message(
-        content="⚙️ **Panel de configuration MK Arena**",
-        embed=embed,
-        view=view,
+        content="⚔️ **MK Arena • Centre de contrôle**",
+        embed=build_main_panel_embed(interaction.guild),
+        view=MKArenaHomePanel(interaction.guild.id),
         ephemeral=True,
     )
 
