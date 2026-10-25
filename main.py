@@ -7,6 +7,8 @@ from datetime import timedelta
 import discord
 from discord.ext import commands
 
+from database import DATABASE_BACKEND, INTEGRITY_ERRORS, get_connection
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -28,8 +30,13 @@ persistent_views_registered = False
 
 
 def init_database():
-    """Crée la table des avertissements si elle n'existe pas."""
-    with sqlite3.connect(DB_PATH) as connection:
+    """Initialise SQLite ou vérifie la connexion au schéma Supabase existant."""
+    if DATABASE_BACKEND == "supabase":
+        with get_connection() as connection:
+            connection.execute("SELECT 1").fetchone()
+        log.info("Connexion Supabase vérifiée ; le schéma est géré par les migrations.")
+        return
+    with get_connection() as connection:
         connection.execute(
             """CREATE TABLE IF NOT EXISTS warnings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,7 +100,7 @@ async def on_ready():
     if not database_ready:
         init_database()
         database_ready = True
-        log.info("Base SQLite initialisée : %s", DB_PATH)
+        log.info("Base de données %s initialisée", DATABASE_BACKEND)
     if not slash_commands_synced:
         try:
             synced = await bot.tree.sync()
@@ -161,12 +168,12 @@ async def warn(ctx: commands.Context, membre: discord.Member, *, raison: str = N
     if membre.id == ctx.author.id:
         await ctx.send("❌ Tu ne peux pas t'avertir toi-même.")
         return
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         cursor = connection.execute(
-            "INSERT INTO warnings (guild_id, user_id, moderator_id, reason) VALUES (?, ?, ?, ?)",
+            "INSERT INTO warnings (guild_id, user_id, moderator_id, reason) VALUES (?, ?, ?, ?) RETURNING id",
             (ctx.guild.id, membre.id, ctx.author.id, raison.strip()),
         )
-        warning_id = cursor.lastrowid
+        warning_id = cursor.fetchone()[0]
     await ctx.send(f"⚠️ {membre.mention} a reçu un avertissement. ID : `{warning_id}`. Raison : {raison}")
 
 
@@ -174,7 +181,7 @@ async def warn(ctx: commands.Context, membre: discord.Member, *, raison: str = N
 @commands.guild_only()
 @commands.has_permissions(moderate_members=True)
 async def warnings(ctx: commands.Context, membre: discord.Member):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         rows = connection.execute(
             "SELECT id, moderator_id, reason, created_at FROM warnings WHERE guild_id = ? AND user_id = ? ORDER BY id DESC LIMIT 10",
             (ctx.guild.id, membre.id),
@@ -200,7 +207,7 @@ async def warnings(ctx: commands.Context, membre: discord.Member):
 @commands.guild_only()
 @commands.has_permissions(moderate_members=True)
 async def unwarn(ctx: commands.Context, membre: discord.Member, warning_id: int):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         cursor = connection.execute(
             "DELETE FROM warnings WHERE id = ? AND guild_id = ? AND user_id = ?",
             (warning_id, ctx.guild.id, membre.id),
@@ -362,7 +369,7 @@ TOURNAMENT_FORMATS = {
 
 
 async def get_tournament_config(guild_id: int, format_key: str):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         row = connection.execute(
             "SELECT details, rules FROM tournament_config WHERE guild_id = ? AND format_key = ?",
             (guild_id, format_key),
@@ -427,7 +434,7 @@ class TournamentInfoModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         details = str(self.details_input.value).strip()
-        with sqlite3.connect(DB_PATH) as connection:
+        with get_connection() as connection:
             connection.execute(
                 """INSERT INTO tournament_config
                    (guild_id, format_key, format_label, details, rules, updated_by)
@@ -462,7 +469,7 @@ class TournamentRulesModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         rules = str(self.rules_input.value).strip()
-        with sqlite3.connect(DB_PATH) as connection:
+        with get_connection() as connection:
             connection.execute(
                 """INSERT INTO tournament_config
                    (guild_id, format_key, format_label, details, rules, updated_by)
@@ -578,7 +585,7 @@ async def build_main_section_embed(guild: discord.Guild, section: str):
         )
         embed.set_footer(text="Les permissions Discord requises sont vérifiées par le bot.")
     elif section == "community":
-        with sqlite3.connect(DB_PATH) as connection:
+        with get_connection() as connection:
             total_xp = connection.execute("SELECT COALESCE(SUM(xp), 0) FROM user_xp WHERE guild_id = ?", (guild.id,)).fetchone()[0]
             tracked_users = connection.execute("SELECT COUNT(*) FROM user_xp WHERE guild_id = ?", (guild.id,)).fetchone()[0]
         embed.description = "XP communautaire actif : les membres gagnent 5 XP par minute d'activité éligible."
@@ -588,7 +595,7 @@ async def build_main_section_embed(guild: discord.Guild, section: str):
     elif section == "support":
         embed.description = "Ouvre un ticket privé avec le bouton ci-dessous. Un seul ticket ouvert par membre est autorisé."
     elif section == "stats":
-        with sqlite3.connect(DB_PATH) as connection:
+        with get_connection() as connection:
             tournament_count = connection.execute(
                 "SELECT COUNT(*) FROM tournaments WHERE guild_id = ?", (guild.id,)
             ).fetchone()[0]
@@ -712,7 +719,7 @@ class MKArenaHomePanel(discord.ui.View):
 
 
 def get_guild_settings(guild_id: int):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         row = connection.execute(
             "SELECT welcome_channel_id, log_channel_id, welcome_enabled, xp_enabled FROM guild_settings WHERE guild_id = ?",
             (guild_id,),
@@ -724,7 +731,7 @@ def update_guild_setting(guild_id: int, key: str, value):
     allowed = {"welcome_channel_id", "log_channel_id", "welcome_enabled", "xp_enabled"}
     if key not in allowed:
         raise ValueError("Réglage non autorisé")
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         connection.execute("INSERT OR IGNORE INTO guild_settings (guild_id) VALUES (?)", (guild_id,))
         connection.execute(
             "UPDATE guild_settings SET " + key + " = ?, updated_at = CURRENT_TIMESTAMP WHERE guild_id = ?",
@@ -817,7 +824,7 @@ class TicketPanelView(discord.ui.View):
         if guild is None or not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message("Utilise ce bouton dans un serveur.", ephemeral=True)
             return
-        with sqlite3.connect(DB_PATH) as connection:
+        with get_connection() as connection:
             row = connection.execute(
                 "SELECT channel_id FROM tickets WHERE guild_id = ? AND user_id = ? AND status = 'open' ORDER BY id DESC LIMIT 1",
                 (guild.id, interaction.user.id),
@@ -840,7 +847,7 @@ class TicketPanelView(discord.ui.View):
                 topic=f"MKARENA_TICKET_OWNER={interaction.user.id}",
                 reason=f"Ticket MK Arena ouvert par {interaction.user}",
             )
-            with sqlite3.connect(DB_PATH) as connection:
+            with get_connection() as connection:
                 connection.execute(
                     "INSERT INTO tickets (guild_id, user_id, channel_id, status) VALUES (?, ?, ?, 'open')",
                     (guild.id, interaction.user.id, channel.id),
@@ -875,7 +882,7 @@ class TicketCloseView(discord.ui.View):
         if not is_owner and not is_staff:
             await interaction.response.send_message("Seul l'auteur du ticket ou un membre du staff autorisé peut le fermer.", ephemeral=True)
             return
-        with sqlite3.connect(DB_PATH) as connection:
+        with get_connection() as connection:
             connection.execute(
                 "UPDATE tickets SET status = 'closed' WHERE guild_id = ? AND channel_id = ? AND status = 'open'",
                 (channel.guild.id, channel.id),
@@ -938,7 +945,7 @@ async def ticketpanel(ctx: commands.Context):
 @commands.guild_only()
 async def profil(ctx: commands.Context, membre: discord.Member = None):
     membre = membre or ctx.author
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         row = connection.execute(
             "SELECT xp, level FROM user_xp WHERE guild_id = ? AND user_id = ?",
             (ctx.guild.id, membre.id),
@@ -955,7 +962,7 @@ async def profil(ctx: commands.Context, membre: discord.Member = None):
 @bot.command(name="classement", description="Affiche le classement XP du serveur")
 @commands.guild_only()
 async def classement(ctx: commands.Context):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         rows = connection.execute(
             "SELECT user_id, xp, level FROM user_xp WHERE guild_id = ? ORDER BY xp DESC LIMIT 10",
             (ctx.guild.id,),
@@ -999,7 +1006,7 @@ async def on_message(message: discord.Message):
         _, _, _, xp_enabled = get_guild_settings(message.guild.id)
         if xp_enabled:
             now = time.time()
-            with sqlite3.connect(DB_PATH) as connection:
+            with get_connection() as connection:
                 row = connection.execute(
                     "SELECT xp, level, last_message_at FROM user_xp WHERE guild_id = ? AND user_id = ?",
                     (message.guild.id, message.author.id),
@@ -1075,7 +1082,7 @@ async def tournoi_format(ctx: commands.Context, format_key: str, *, details: str
     if not details:
         await ctx.send("❌ Ajoute les informations du format.")
         return
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         connection.execute(
             """INSERT INTO tournament_config
                (guild_id, format_key, format_label, details, rules, updated_by)
@@ -1102,7 +1109,7 @@ async def tournoi_regles(ctx: commands.Context, format_key: str, *, rules: str):
     if not rules:
         await ctx.send("❌ Ajoute les règles à enregistrer.")
         return
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         connection.execute(
             """INSERT INTO tournament_config
                (guild_id, format_key, format_label, details, rules, updated_by)
@@ -1128,12 +1135,12 @@ async def tournoi_creer(ctx: commands.Context, places: int, *, nom: str):
     if places < 2 or places > 256:
         await ctx.send("❌ Le nombre de places doit être compris entre 2 et 256.")
         return
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         cursor = connection.execute(
-            "INSERT INTO tournaments (guild_id, name, max_players, creator_id) VALUES (?, ?, ?, ?)",
+            "INSERT INTO tournaments (guild_id, name, max_players, creator_id) VALUES (?, ?, ?, ?) RETURNING id",
             (ctx.guild.id, nom[:100], places, ctx.author.id),
         )
-        tournament_id = cursor.lastrowid
+        tournament_id = cursor.fetchone()[0]
     embed = discord.Embed(
         title=f"🏆 Tournoi CODM créé : {nom[:100]}",
         description=f"ID : `{tournament_id}`\nPlaces : **{places}**\nStatut : 🟢 Inscriptions ouvertes",
@@ -1146,7 +1153,7 @@ async def tournoi_creer(ctx: commands.Context, places: int, *, nom: str):
 @tournoi.command(name="liste", description="Liste les tournois CODM du serveur")
 @commands.guild_only()
 async def tournoi_liste(ctx: commands.Context):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         rows = connection.execute(
             """SELECT t.id, t.name, t.max_players, t.status, COUNT(r.user_id)
                FROM tournaments t LEFT JOIN tournament_registrations r ON r.tournament_id = t.id
@@ -1170,7 +1177,7 @@ async def tournoi_liste(ctx: commands.Context):
 @tournoi.command(name="info", description="Affiche les détails d'un tournoi")
 @commands.guild_only()
 async def tournoi_info(ctx: commands.Context, tournament_id: int):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         row = connection.execute(
             """SELECT t.name, t.max_players, t.status, t.creator_id, t.created_at, COUNT(r.user_id)
                FROM tournaments t LEFT JOIN tournament_registrations r ON r.tournament_id = t.id
@@ -1202,7 +1209,7 @@ async def tournoi_info(ctx: commands.Context, tournament_id: int):
 @commands.guild_only()
 @commands.has_permissions(manage_guild=True)
 async def tournoi_fermer(ctx: commands.Context, tournament_id: int):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         cursor = connection.execute(
             "UPDATE tournaments SET status = 'closed' WHERE id = ? AND guild_id = ? AND status = 'open'",
             (tournament_id, ctx.guild.id),
@@ -1214,7 +1221,7 @@ async def tournoi_fermer(ctx: commands.Context, tournament_id: int):
 @commands.guild_only()
 @commands.has_permissions(manage_guild=True)
 async def tournoi_ouvrir(ctx: commands.Context, tournament_id: int):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         cursor = connection.execute(
             "UPDATE tournaments SET status = 'open' WHERE id = ? AND guild_id = ? AND status = 'closed'",
             (tournament_id, ctx.guild.id),
@@ -1226,7 +1233,7 @@ async def tournoi_ouvrir(ctx: commands.Context, tournament_id: int):
 @commands.guild_only()
 @commands.has_permissions(manage_guild=True)
 async def tournoi_lancer(ctx: commands.Context, tournament_id: int):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         row = connection.execute(
             """SELECT t.name, t.max_players, COUNT(r.user_id)
                FROM tournaments t LEFT JOIN tournament_registrations r ON r.tournament_id = t.id
@@ -1251,7 +1258,7 @@ async def tournoi_lancer(ctx: commands.Context, tournament_id: int):
 @tournoi.command(name="inscrire", description="S'inscrit à un tournoi CODM")
 @commands.guild_only()
 async def tournoi_inscrire(ctx: commands.Context, tournament_id: int):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         row = connection.execute(
             "SELECT name, max_players, status FROM tournaments WHERE id = ? AND guild_id = ?",
             (tournament_id, ctx.guild.id),
@@ -1275,7 +1282,7 @@ async def tournoi_inscrire(ctx: commands.Context, tournament_id: int):
                 "INSERT INTO tournament_registrations (tournament_id, user_id) VALUES (?, ?)",
                 (tournament_id, ctx.author.id),
             )
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             await ctx.send("ℹ️ Tu es déjà inscrit à ce tournoi.")
             return
     await ctx.send(f"✅ {ctx.author.mention}, ton inscription à **{name}** est confirmée ! ({count + 1}/{maximum})")
@@ -1284,7 +1291,7 @@ async def tournoi_inscrire(ctx: commands.Context, tournament_id: int):
 @tournoi.command(name="desinscrire", description="Se désinscrit d'un tournoi CODM")
 @commands.guild_only()
 async def tournoi_desinscrire(ctx: commands.Context, tournament_id: int):
-    with sqlite3.connect(DB_PATH) as connection:
+    with get_connection() as connection:
         row = connection.execute(
             "SELECT name, status FROM tournaments WHERE id = ? AND guild_id = ?",
             (tournament_id, ctx.guild.id),
