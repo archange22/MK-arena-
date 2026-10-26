@@ -46,3 +46,17 @@ Configurer la variable d'environnement `DISCORD_TOKEN`, puis lancer :
 ```bash
 python main.py
 ```
+
+
+## Base de données Supabase (préparée, sans déploiement)
+
+SQLite reste le mode par défaut. Pour utiliser le projet Supabase dédié **MK Arena** :
+1. Installer les dépendances avec `pip install -r requirements.txt`.
+2. Définir `DATABASE_BACKEND=supabase` dans les variables du service.
+3. Définir `SUPABASE_DB_URL` avec l'URI PostgreSQL du projet MK Arena dans les paramètres Database de Supabase. Utiliser l'URI du pooler si l'hébergeur le nécessite.
+4. Garder cette URI secrète dans les variables du service, jamais dans GitHub ni côté client Discord.
+5. Tester d'abord sur une copie de la base SQLite. Les anciennes données ne sont pas importées automatiquement.
+
+Le bot utilise les tables `public.mk_*` créées par les migrations. RLS est activé sans accès client public ; le bot doit se connecter côté serveur avec l'URI PostgreSQL privée. SQLite reste le mode de repli tant que `DATABASE_BACKEND=supabase` n'est pas défini.
+
+**Ce changement est dans une branche séparée. Il ne déploie pas le bot et ne configure pas Render automatiquement.**
