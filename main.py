@@ -129,7 +129,7 @@ async def on_ready():
 
 # --- MK Arena Hybrid Chatbot ---
 CHATBOT_SYSTEM_PROMPT = (
-    "Tu es MK Arena AI, assistant Discord francophone spécialisé COD Mobile et MK Arena. "
+    "Tu es NOVA, assistant IA officiel de MK Arena, francophone et spécialisé COD Mobile et la communauté MK Arena. "
     "Réponds naturellement sur les modes, réglages, stratégies, tournois et commandes. "
     "Ne prétends pas connaître les mises à jour en direct. Ne révèle pas de secrets ou données privées. "
     "Ne réalise jamais d'action de modération ou d'administration depuis une conversation."
@@ -141,9 +141,9 @@ def _chat_intent_reply(question: str, guild: discord.Guild | None = None) -> str
     if not q:
         return "Pose une question après !chat, par exemple : !chat comment progresser en ranked ?"
     if any(w in q for w in ("bonjour", "salut", "hello", "bonsoir", "coucou")):
-        return "Salut ! 🎮 Je suis MK Arena AI. On parle de stratégie CODM, réglages, modes de jeu ou tournois ?"
+        return "Salut ! 🎮 Je suis NOVA. On parle de stratégie CODM, réglages, modes de jeu ou tournois ?"
     if any(w in q for w in ("qui es-tu", "qui est tu", "ton nom", "tu es qui")):
-        return "Je suis MK Arena AI, l'assistant gaming de la communauté. Je peux aider sur COD Mobile, les tournois et les commandes du serveur. 🤖"
+        return "Je suis NOVA, l'assistant gaming de la communauté. Je peux aider sur COD Mobile, les tournois et les commandes du serveur. 🤖"
     if any(w in q for w in ("sensibilité", "sensibilite", "réglage", "reglage", "hud", "gyroscope", "dpi")):
         return ("🎯 Réglages CODM : pars d'une sensibilité moyenne, puis change un paramètre à la fois. "
                 "Teste caméra, tir et gyroscope séparément. Le bon réglage dépend de ton appareil et de ta façon de jouer. "
@@ -220,7 +220,7 @@ async def generate_chatbot_reply(question: str, guild: discord.Guild | None, his
 @commands.cooldown(1, 4, commands.BucketType.user)
 async def chat(ctx: commands.Context, *, question: str):
     answer = await generate_chatbot_reply(question, ctx.guild, (ctx.guild.id if ctx.guild else 0, ctx.author.id))
-    embed = discord.Embed(title="🤖 MK Arena AI", description=answer, color=discord.Color.blurple())
+    embed = discord.Embed(title="🤖 NOVA", description=answer, color=discord.Color.blurple())
     embed.set_footer(text="Assistant gaming • Réponses automatiques")
     await ctx.reply(embed=embed, mention_author=False)
 
@@ -234,7 +234,7 @@ async def chatreset(ctx: commands.Context):
 @bot.command(name="chatinfo", description="Affiche le mode actuel du chatbot")
 async def chatinfo(ctx: commands.Context):
     mode = f"Endpoint IA compatible OpenAI configuré ({CHATBOT_MODEL})." if CHATBOT_API_URL and CHATBOT_MODEL else "Mode local gratuit, sans clé API."
-    embed = discord.Embed(title="🤖 MK Arena AI • État", description=mode, color=discord.Color.blurple())
+    embed = discord.Embed(title="🤖 NOVA • État", description=mode, color=discord.Color.blurple())
     embed.add_field(name="Comment parler", value="!chat ta question ou mentionne le bot.", inline=False)
     embed.add_field(name="Mémoire", value="Contexte court en mémoire pendant l'exécution du bot.", inline=False)
     await ctx.send(embed=embed)
@@ -1146,10 +1146,14 @@ async def on_message(message: discord.Message):
     is_command = message.content.startswith("!")
     dedicated = message.channel.name.lower() in {"parler-a-mk", "parler-à-mk", "chat-mk", "mk-chat"}
     mentioned = bot.user is not None and bot.user in message.mentions
-    if not is_command and (dedicated or mentioned):
+    called_nova = re.search(r"\bnova\b", message.content, flags=re.IGNORECASE) is not None
+    if not is_command and (dedicated or mentioned or called_nova):
         question = message.content
         if bot.user:
             question = question.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
+        question = re.sub(r"\bnova\b", "", question, flags=re.IGNORECASE).strip(" ,.!?\n\t")
+        if not question:
+            question = "Présente-toi et explique comment tu peux aider sur MK Arena et COD Mobile."
         key = (message.guild.id, message.author.id)
         with sqlite3.connect(DB_PATH) as connection:
             row = connection.execute(
