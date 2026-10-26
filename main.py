@@ -50,7 +50,10 @@ def normalize_text(value: str) -> str:
 
 def has_any(text: str, phrases: tuple[str, ...]) -> bool:
     """Recherche des expressions entières, sans confondre des mots partiels."""
-    return any(re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", text) for phrase in phrases)
+    return any(
+        re.search(r"(?<!\w)" + re.escape(normalize_text(phrase)) + r"(?!\w)", text)
+        for phrase in phrases
+    )
 
 
 def local_reply(message: str, history=None) -> str:
