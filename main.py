@@ -1,13 +1,12 @@
 import os
 import logging
-import sqlite3
 import time
 from datetime import timedelta
 
 import discord
 from discord.ext import commands
 
-from database import DATABASE_BACKEND, INTEGRITY_ERRORS, get_connection
+from database import DATABASE_BACKEND, get_connection
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,38 +44,6 @@ def init_database():
                 moderator_id INTEGER NOT NULL,
                 reason TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )"""
-        )
-        connection.execute(
-            """CREATE TABLE IF NOT EXISTS tournaments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                guild_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                max_players INTEGER NOT NULL,
-                status TEXT NOT NULL DEFAULT 'open',
-                creator_id INTEGER NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )"""
-        )
-        connection.execute(
-            """CREATE TABLE IF NOT EXISTS tournament_registrations (
-                tournament_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                registered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (tournament_id, user_id),
-                FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE
-            )"""
-        )
-        connection.execute(
-            """CREATE TABLE IF NOT EXISTS tournament_config (
-                guild_id INTEGER NOT NULL,
-                format_key TEXT NOT NULL,
-                format_label TEXT NOT NULL,
-                details TEXT NOT NULL DEFAULT '',
-                rules TEXT NOT NULL DEFAULT '',
-                updated_by INTEGER NOT NULL,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (guild_id, format_key)
             )"""
         )
         connection.execute("""CREATE TABLE IF NOT EXISTS guild_settings (
@@ -144,11 +111,6 @@ async def aide(ctx: commands.Context):
     embed.add_field(
         name="Modération",
         value="`!clear 10`\n`!kick @membre raison`\n`!ban @membre raison`\n`!timeout @membre minutes raison`\n`!slowmode secondes`\n`!lock`\n`!unlock`\n`!warn @membre raison`\n`!warnings @membre`\n`!unwarn @membre ID`",
-        inline=False,
-    )
-    embed.add_field(
-        name="Configuration • Tournois CODM",
-        value="`!panel`\n`!config panel`\n`!config tournoi panel`\n`!config tournoi format bo3_5v5 Infos...`\n`!config tournoi regles bo3_5v5 Regles...`\n`!config tournoi creer 10 Nom du tournoi`\n`!config tournoi liste`\n`!config tournoi info ID`\n`!config tournoi fermer ID`\n`!config tournoi ouvrir ID`\n`!config tournoi lancer ID`\n`!config tournoi inscrire ID`\n`!config tournoi desinscrire ID`",
         inline=False,
     )
     embed.set_footer(text="MK Arena • Commandes préfixe !")
@@ -342,192 +304,9 @@ async def unlock(ctx: commands.Context):
 @bot.group(name="config", invoke_without_command=True, description="Configuration de MK Arena")
 async def config(ctx: commands.Context):
     await ctx.send(
-        "⚙️ Configuration MK Arena : `!config tournoi`. "
+        "⚙️ Configuration MK Arena : `!config panel`. "
         "Utilise `!aide` pour afficher les commandes disponibles."
     )
-
-
-@config.group(name="tournoi", invoke_without_command=True, description="Gestion des tournois CODM")
-async def tournoi(ctx: commands.Context):
-    await ctx.send(
-        "🏆 Panel tournoi : `!config tournoi panel`. "
-        "Admins : `!config tournoi format <mode> <infos>` et "
-        "`!config tournoi regles <mode> <règles>`. "
-        "Gestion : `!config tournoi creer <places> <nom>`, `liste`, `info <ID>`, "
-        "`fermer <ID>`, `ouvrir <ID>`, `lancer <ID>`, `inscrire <ID>`, `desinscrire <ID>`."
-    )
-
-TOURNAMENT_FORMATS = {
-    "bo3_5v5": "CODM BO3 • 5v5",
-    "battle_royale": "Battle Royale",
-    "3v3": "CODM • 3v3",
-    "1v1": "CODM • 1v1",
-    "2v2": "CODM • 2v2",
-    "full_sniper": "Full Sniper",
-    "full_smg": "Full SMG",
-}
-
-
-async def get_tournament_config(guild_id: int, format_key: str):
-    with get_connection() as connection:
-        row = connection.execute(
-            "SELECT details, rules FROM tournament_config WHERE guild_id = ? AND format_key = ?",
-            (guild_id, format_key),
-        ).fetchone()
-    return row or ("", "")
-
-
-async def build_tournament_panel_embed(guild_id: int, format_key: str):
-    label = TOURNAMENT_FORMATS[format_key]
-    details, rules = await get_tournament_config(guild_id, format_key)
-    embed = discord.Embed(
-        title="🏆 MK Arena • Configuration des tournois",
-        description=(
-            f"**Mode sélectionné : {label}**\n\n"
-            "Choisis un mode dans le menu, puis utilise les boutons pour modifier ses informations ou ses règles."
-        ),
-        color=discord.Color.blurple(),
-    )
-    embed.add_field(name="📋 Informations du format", value=(details or "Pas encore configurées.")[:1024], inline=False)
-    embed.add_field(name="📜 Règles du format", value=(rules or "Pas encore configurées.")[:1024], inline=False)
-    embed.set_footer(text="Modification réservée aux membres ayant la permission Gérer le serveur.")
-    return embed
-
-
-class TournamentFormatSelect(discord.ui.Select):
-    def __init__(self, panel_view):
-        self.panel_view = panel_view
-        options = [
-            discord.SelectOption(label=label, value=key, default=(key == panel_view.selected_key))
-            for key, label in TOURNAMENT_FORMATS.items()
-        ]
-        super().__init__(
-            placeholder="Choisir un mode de tournoi...",
-            min_values=1,
-            max_values=1,
-            options=options,
-            custom_id="mk_arena_tournament_format_select",
-        )
-
-    async def callback(self, interaction: discord.Interaction):
-        self.panel_view.selected_key = self.values[0]
-        for option in self.options:
-            option.default = option.value == self.panel_view.selected_key
-        embed = await build_tournament_panel_embed(interaction.guild_id, self.panel_view.selected_key)
-        await interaction.response.edit_message(embed=embed, view=self.panel_view)
-
-
-class TournamentInfoModal(discord.ui.Modal):
-    def __init__(self, guild_id: int, format_key: str, initial: str = ""):
-        self.guild_id = guild_id
-        self.format_key = format_key
-        super().__init__(title=f"Modifier : {TOURNAMENT_FORMATS[format_key]}", timeout=300)
-        self.details_input = discord.ui.TextInput(
-            label="Informations du mode",
-            placeholder="Ex. BO3, 5 joueurs par équipe, conditions de victoire...",
-            default=initial[:1800] if initial else None,
-            style=discord.TextStyle.paragraph,
-            max_length=1800,
-            required=True,
-        )
-        self.add_item(self.details_input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        details = str(self.details_input.value).strip()
-        with get_connection() as connection:
-            connection.execute(
-                """INSERT INTO tournament_config
-                   (guild_id, format_key, format_label, details, rules, updated_by)
-                   VALUES (?, ?, ?, ?, '', ?)
-                   ON CONFLICT(guild_id, format_key) DO UPDATE SET
-                   format_label = excluded.format_label,
-                   details = excluded.details,
-                   updated_by = excluded.updated_by,
-                   updated_at = CURRENT_TIMESTAMP""",
-                (self.guild_id, self.format_key, TOURNAMENT_FORMATS[self.format_key], details, interaction.user.id),
-            )
-        await interaction.response.send_message(
-            f"✅ Informations enregistrées pour **{TOURNAMENT_FORMATS[self.format_key]}**. Clique sur **Actualiser** dans le panel.",
-            ephemeral=True,
-        )
-
-
-class TournamentRulesModal(discord.ui.Modal):
-    def __init__(self, guild_id: int, format_key: str, initial: str = ""):
-        self.guild_id = guild_id
-        self.format_key = format_key
-        super().__init__(title=f"Règles : {TOURNAMENT_FORMATS[format_key]}", timeout=300)
-        self.rules_input = discord.ui.TextInput(
-            label="Règles du tournoi",
-            placeholder="Ex. interdiction de tricher, retard, forfait, preuves...",
-            default=initial[:1800] if initial else None,
-            style=discord.TextStyle.paragraph,
-            max_length=1800,
-            required=True,
-        )
-        self.add_item(self.rules_input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        rules = str(self.rules_input.value).strip()
-        with get_connection() as connection:
-            connection.execute(
-                """INSERT INTO tournament_config
-                   (guild_id, format_key, format_label, details, rules, updated_by)
-                   VALUES (?, ?, ?, '', ?, ?)
-                   ON CONFLICT(guild_id, format_key) DO UPDATE SET
-                   format_label = excluded.format_label,
-                   rules = excluded.rules,
-                   updated_by = excluded.updated_by,
-                   updated_at = CURRENT_TIMESTAMP""",
-                (self.guild_id, self.format_key, TOURNAMENT_FORMATS[self.format_key], rules, interaction.user.id),
-            )
-        await interaction.response.send_message(
-            f"✅ Règles enregistrées pour **{TOURNAMENT_FORMATS[self.format_key]}**. Clique sur **Actualiser** dans le panel.",
-            ephemeral=True,
-        )
-
-
-class TournamentConfigPanel(discord.ui.View):
-    def __init__(self, guild_id: int):
-        super().__init__(timeout=600)
-        self.guild_id = guild_id
-        self.selected_key = "bo3_5v5"
-        self.add_item(TournamentFormatSelect(self))
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.guild_id != self.guild_id:
-            await interaction.response.send_message("❌ Ce panel appartient à un autre serveur.", ephemeral=True)
-            return False
-        return True
-
-    async def require_admin(self, interaction: discord.Interaction) -> bool:
-        if not interaction.user.guild_permissions.manage_guild:
-            await interaction.response.send_message(
-                "❌ Il faut la permission **Gérer le serveur** pour modifier ce panel.",
-                ephemeral=True,
-            )
-            return False
-        return True
-
-    @discord.ui.button(label="Modifier les infos", style=discord.ButtonStyle.primary, emoji="📝", row=1)
-    async def edit_info(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await self.require_admin(interaction):
-            return
-        details, _ = await get_tournament_config(self.guild_id, self.selected_key)
-        await interaction.response.send_modal(TournamentInfoModal(self.guild_id, self.selected_key, details))
-
-    @discord.ui.button(label="Modifier les règles", style=discord.ButtonStyle.primary, emoji="📜", row=1)
-    async def edit_rules(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await self.require_admin(interaction):
-            return
-        _, rules = await get_tournament_config(self.guild_id, self.selected_key)
-        await interaction.response.send_modal(TournamentRulesModal(self.guild_id, self.selected_key, rules))
-
-    @discord.ui.button(label="Actualiser", style=discord.ButtonStyle.secondary, emoji="🔄", row=2)
-    async def refresh_panel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = await build_tournament_panel_embed(self.guild_id, self.selected_key)
-        await interaction.response.edit_message(embed=embed, view=self)
-
 
 
 def build_main_panel_embed(guild: discord.Guild):
@@ -540,7 +319,6 @@ def build_main_panel_embed(guild: discord.Guild):
         color=discord.Color.from_rgb(111, 66, 193),
     )
     embed.add_field(name="⚙️ Configuration", value="Réglages disponibles et commandes du serveur", inline=True)
-    embed.add_field(name="🏆 Tournois CODM", value="Formats, règles et inscriptions", inline=True)
     embed.add_field(name="🛡️ Modération", value="Outils de sécurité et sanctions", inline=True)
     embed.add_field(name="👥 Communauté", value="Fonctions communautaires à développer", inline=True)
     embed.add_field(name="📊 Statistiques", value="Vue d'ensemble du serveur", inline=True)
@@ -554,7 +332,6 @@ def build_main_panel_embed(guild: discord.Guild):
 async def build_main_section_embed(guild: discord.Guild, section: str):
     titles = {
         "config": "⚙️ Configuration du serveur",
-        "tournaments": "🏆 Centre des tournois CODM",
         "moderation": "🛡️ Centre de modération",
         "community": "👥 Communauté",
         "stats": "📊 Statistiques du serveur",
@@ -570,7 +347,6 @@ async def build_main_section_embed(guild: discord.Guild, section: str):
             "XP : " + ("Activé" if xp_enabled else "Désactivé") + "\n\n"
             "Les boutons de cette page définissent le salon actuel et activent ou désactivent les fonctions."
         )
-        embed.add_field(name="Commandes utiles", value="!ticketpanel : publier le panneau de tickets\n!config tournoi panel : configurer les tournois", inline=False)
     elif section == "moderation":
         embed.description = (
             "Les commandes de modération déjà disponibles :\n"
@@ -596,16 +372,12 @@ async def build_main_section_embed(guild: discord.Guild, section: str):
         embed.description = "Ouvre un ticket privé avec le bouton ci-dessous. Un seul ticket ouvert par membre est autorisé."
     elif section == "stats":
         with get_connection() as connection:
-            tournament_count = connection.execute(
-                "SELECT COUNT(*) FROM tournaments WHERE guild_id = ?", (guild.id,)
-            ).fetchone()[0]
             warning_count = connection.execute(
                 "SELECT COUNT(*) FROM warnings WHERE guild_id = ?", (guild.id,)
             ).fetchone()[0]
         embed.description = "Aperçu calculé à partir des données locales de MK Arena."
         embed.add_field(name="👥 Membres", value=str(guild.member_count or "Inconnu"), inline=True)
         embed.add_field(name="💬 Salons", value=str(len(guild.channels)), inline=True)
-        embed.add_field(name="🏆 Tournois enregistrés", value=str(tournament_count), inline=True)
         embed.add_field(name="⚠️ Avertissements enregistrés", value=str(warning_count), inline=True)
     else:
         embed.description = "Choisis une section du panel principal."
@@ -666,15 +438,6 @@ class MKArenaHomePanel(discord.ui.View):
         if interaction.guild is None:
             await interaction.response.send_message("❌ Utilise ce panel dans un serveur.", ephemeral=True)
             return
-        if section == "tournaments":
-            view = TournamentConfigPanel(self.guild_id)
-            embed = await build_tournament_panel_embed(self.guild_id, view.selected_key)
-            await interaction.response.edit_message(
-                content="🏆 **MK Arena • Centre des tournois**",
-                embed=embed,
-                view=view,
-            )
-            return
         await interaction.response.edit_message(
             content=None,
             embed=await build_main_section_embed(interaction.guild, section),
@@ -684,10 +447,6 @@ class MKArenaHomePanel(discord.ui.View):
     @discord.ui.button(label="Configuration", style=discord.ButtonStyle.secondary, emoji="⚙️", row=0)
     async def open_config(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.open_section(interaction, "config")
-
-    @discord.ui.button(label="Tournois CODM", style=discord.ButtonStyle.primary, emoji="🏆", row=0)
-    async def open_tournaments(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.open_section(interaction, "tournaments")
 
     @discord.ui.button(label="Modération", style=discord.ButtonStyle.secondary, emoji="🛡️", row=1)
     async def open_moderation(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1036,14 +795,6 @@ async def panel(ctx: commands.Context):
     )
 
 
-@tournoi.command(name="panel", description="Ouvre le panel interactif des tournois CODM")
-@commands.guild_only()
-async def tournoi_panel(ctx: commands.Context):
-    view = TournamentConfigPanel(ctx.guild.id)
-    embed = await build_tournament_panel_embed(ctx.guild.id, view.selected_key)
-    await ctx.send(embed=embed, view=view)
-
-
 @config.command(name="panel", description="Ouvre le panel de configuration MK Arena")
 @commands.guild_only()
 async def config_panel(ctx: commands.Context):
@@ -1068,249 +819,6 @@ async def slash_config(interaction: discord.Interaction):
         view=MKArenaHomePanel(interaction.guild.id),
         ephemeral=True,
     )
-
-
-@tournoi.command(name="format", description="Configure les informations d'un format")
-@commands.guild_only()
-@commands.has_permissions(manage_guild=True)
-async def tournoi_format(ctx: commands.Context, format_key: str, *, details: str):
-    format_key = format_key.lower()
-    if format_key not in TOURNAMENT_FORMATS:
-        await ctx.send("❌ Format inconnu. Choisis : " + ", ".join(f"`{key}`" for key in TOURNAMENT_FORMATS))
-        return
-    details = details.strip()
-    if not details:
-        await ctx.send("❌ Ajoute les informations du format.")
-        return
-    with get_connection() as connection:
-        connection.execute(
-            """INSERT INTO tournament_config
-               (guild_id, format_key, format_label, details, rules, updated_by)
-               VALUES (?, ?, ?, ?, '', ?)
-               ON CONFLICT(guild_id, format_key) DO UPDATE SET
-               format_label = excluded.format_label,
-               details = excluded.details,
-               updated_by = excluded.updated_by,
-               updated_at = CURRENT_TIMESTAMP""",
-            (ctx.guild.id, format_key, TOURNAMENT_FORMATS[format_key], details[:1800], ctx.author.id),
-        )
-    await ctx.send(f"✅ Informations enregistrées pour **{TOURNAMENT_FORMATS[format_key]}**. Utilise `!config tournoi panel` pour voir le résultat.")
-
-
-@tournoi.command(name="regles", description="Configure les règles d'un format")
-@commands.guild_only()
-@commands.has_permissions(manage_guild=True)
-async def tournoi_regles(ctx: commands.Context, format_key: str, *, rules: str):
-    format_key = format_key.lower()
-    if format_key not in TOURNAMENT_FORMATS:
-        await ctx.send("❌ Format inconnu. Choisis : " + ", ".join(f"`{key}`" for key in TOURNAMENT_FORMATS))
-        return
-    rules = rules.strip()
-    if not rules:
-        await ctx.send("❌ Ajoute les règles à enregistrer.")
-        return
-    with get_connection() as connection:
-        connection.execute(
-            """INSERT INTO tournament_config
-               (guild_id, format_key, format_label, details, rules, updated_by)
-               VALUES (?, ?, ?, '', ?, ?)
-               ON CONFLICT(guild_id, format_key) DO UPDATE SET
-               format_label = excluded.format_label,
-               rules = excluded.rules,
-               updated_by = excluded.updated_by,
-               updated_at = CURRENT_TIMESTAMP""",
-            (ctx.guild.id, format_key, TOURNAMENT_FORMATS[format_key], rules[:1800], ctx.author.id),
-        )
-    await ctx.send(f"✅ Règles enregistrées pour **{TOURNAMENT_FORMATS[format_key]}**. Utilise `!config tournoi panel` pour voir le résultat.")
-
-
-@tournoi.command(name="creer", description="Crée un tournoi CODM")
-@commands.guild_only()
-@commands.has_permissions(manage_guild=True)
-async def tournoi_creer(ctx: commands.Context, places: int, *, nom: str):
-    nom = nom.strip()
-    if not nom:
-        await ctx.send("❌ Donne un nom au tournoi.")
-        return
-    if places < 2 or places > 256:
-        await ctx.send("❌ Le nombre de places doit être compris entre 2 et 256.")
-        return
-    with get_connection() as connection:
-        cursor = connection.execute(
-            "INSERT INTO tournaments (guild_id, name, max_players, creator_id) VALUES (?, ?, ?, ?) RETURNING id",
-            (ctx.guild.id, nom[:100], places, ctx.author.id),
-        )
-        tournament_id = cursor.fetchone()[0]
-    embed = discord.Embed(
-        title=f"🏆 Tournoi CODM créé : {nom[:100]}",
-        description=f"ID : `{tournament_id}`\nPlaces : **{places}**\nStatut : 🟢 Inscriptions ouvertes",
-        color=discord.Color.green(),
-    )
-    embed.set_footer(text=f"Créé par {ctx.author}")
-    await ctx.send(embed=embed)
-
-
-@tournoi.command(name="liste", description="Liste les tournois CODM du serveur")
-@commands.guild_only()
-async def tournoi_liste(ctx: commands.Context):
-    with get_connection() as connection:
-        rows = connection.execute(
-            """SELECT t.id, t.name, t.max_players, t.status, COUNT(r.user_id)
-               FROM tournaments t LEFT JOIN tournament_registrations r ON r.tournament_id = t.id
-               WHERE t.guild_id = ? GROUP BY t.id ORDER BY t.id DESC LIMIT 15""",
-            (ctx.guild.id,),
-        ).fetchall()
-    if not rows:
-        await ctx.send("🏆 Aucun tournoi enregistré sur ce serveur. Un administrateur peut en créer avec `!tournoi creer 10 Nom`.")
-        return
-    embed = discord.Embed(title="🏆 Tournois CODM", color=discord.Color.blurple())
-    status_names = {"open": "🟢 Inscriptions ouvertes", "closed": "🟠 Inscriptions fermées", "running": "🔴 En cours", "finished": "🏁 Terminé"}
-    for tid, name, maximum, status, count in rows:
-        embed.add_field(
-            name=f"#{tid} • {name}",
-            value=f"{status_names.get(status, status)}\n👥 {count}/{maximum} participants",
-            inline=False,
-        )
-    await ctx.send(embed=embed)
-
-
-@tournoi.command(name="info", description="Affiche les détails d'un tournoi")
-@commands.guild_only()
-async def tournoi_info(ctx: commands.Context, tournament_id: int):
-    with get_connection() as connection:
-        row = connection.execute(
-            """SELECT t.name, t.max_players, t.status, t.creator_id, t.created_at, COUNT(r.user_id)
-               FROM tournaments t LEFT JOIN tournament_registrations r ON r.tournament_id = t.id
-               WHERE t.guild_id = ? AND t.id = ? GROUP BY t.id""",
-            (ctx.guild.id, tournament_id),
-        ).fetchone()
-        players = connection.execute(
-            """SELECT user_id FROM tournament_registrations WHERE tournament_id = ?
-               ORDER BY registered_at LIMIT 30""",
-            (tournament_id,),
-        ).fetchall() if row else []
-    if not row:
-        await ctx.send("❌ Tournoi introuvable sur ce serveur.")
-        return
-    name, maximum, status, creator_id, created_at, count = row
-    status_names = {"open": "🟢 Inscriptions ouvertes", "closed": "🟠 Inscriptions fermées", "running": "🔴 En cours", "finished": "🏁 Terminé"}
-    mentions = "\n".join(f"• <@{player_id}>" for (player_id,) in players) or "Aucun participant pour le moment."
-    embed = discord.Embed(title=f"🏆 {name}", color=discord.Color.blurple())
-    embed.add_field(name="ID", value=str(tournament_id), inline=True)
-    embed.add_field(name="Participants", value=f"{count}/{maximum}", inline=True)
-    embed.add_field(name="Statut", value=status_names.get(status, status), inline=True)
-    embed.add_field(name="Organisateur", value=f"<@{creator_id}>", inline=True)
-    embed.add_field(name="Créé le", value=created_at, inline=True)
-    embed.add_field(name="Inscrits", value=mentions[:1024], inline=False)
-    await ctx.send(embed=embed)
-
-
-@tournoi.command(name="fermer", description="Ferme les inscriptions d'un tournoi")
-@commands.guild_only()
-@commands.has_permissions(manage_guild=True)
-async def tournoi_fermer(ctx: commands.Context, tournament_id: int):
-    with get_connection() as connection:
-        cursor = connection.execute(
-            "UPDATE tournaments SET status = 'closed' WHERE id = ? AND guild_id = ? AND status = 'open'",
-            (tournament_id, ctx.guild.id),
-        )
-    await ctx.send("🔒 Inscriptions fermées." if cursor.rowcount else "❌ Tournoi introuvable ou inscriptions déjà fermées.")
-
-
-@tournoi.command(name="ouvrir", description="Ouvre les inscriptions d'un tournoi")
-@commands.guild_only()
-@commands.has_permissions(manage_guild=True)
-async def tournoi_ouvrir(ctx: commands.Context, tournament_id: int):
-    with get_connection() as connection:
-        cursor = connection.execute(
-            "UPDATE tournaments SET status = 'open' WHERE id = ? AND guild_id = ? AND status = 'closed'",
-            (tournament_id, ctx.guild.id),
-        )
-    await ctx.send("🔓 Inscriptions ouvertes." if cursor.rowcount else "❌ Tournoi introuvable ou impossible à rouvrir (il doit être fermé).")
-
-
-@tournoi.command(name="lancer", description="Lance un tournoi et ferme les inscriptions")
-@commands.guild_only()
-@commands.has_permissions(manage_guild=True)
-async def tournoi_lancer(ctx: commands.Context, tournament_id: int):
-    with get_connection() as connection:
-        row = connection.execute(
-            """SELECT t.name, t.max_players, COUNT(r.user_id)
-               FROM tournaments t LEFT JOIN tournament_registrations r ON r.tournament_id = t.id
-               WHERE t.guild_id = ? AND t.id = ? AND t.status IN ('open', 'closed')
-               GROUP BY t.id""",
-            (ctx.guild.id, tournament_id),
-        ).fetchone()
-        if not row:
-            await ctx.send("❌ Tournoi introuvable ou déjà lancé.")
-            return
-        name, maximum, count = row
-        if count < 2:
-            await ctx.send("❌ Il faut au moins 2 participants inscrits pour lancer le tournoi.")
-            return
-        connection.execute(
-            "UPDATE tournaments SET status = 'running' WHERE id = ? AND guild_id = ?",
-            (tournament_id, ctx.guild.id),
-        )
-    await ctx.send(f"🚨 **{name}** démarre ! {count}/{maximum} participants inscrits. Les inscriptions sont maintenant fermées.")
-
-
-@tournoi.command(name="inscrire", description="S'inscrit à un tournoi CODM")
-@commands.guild_only()
-async def tournoi_inscrire(ctx: commands.Context, tournament_id: int):
-    with get_connection() as connection:
-        row = connection.execute(
-            "SELECT name, max_players, status FROM tournaments WHERE id = ? AND guild_id = ?",
-            (tournament_id, ctx.guild.id),
-        ).fetchone()
-        if not row:
-            await ctx.send("❌ Tournoi introuvable sur ce serveur.")
-            return
-        name, maximum, status = row
-        if status != "open":
-            await ctx.send("❌ Les inscriptions à ce tournoi ne sont pas ouvertes.")
-            return
-        count = connection.execute(
-            "SELECT COUNT(*) FROM tournament_registrations WHERE tournament_id = ?",
-            (tournament_id,),
-        ).fetchone()[0]
-        if count >= maximum:
-            await ctx.send("❌ Ce tournoi affiche complet.")
-            return
-        try:
-            connection.execute(
-                "INSERT INTO tournament_registrations (tournament_id, user_id) VALUES (?, ?)",
-                (tournament_id, ctx.author.id),
-            )
-        except INTEGRITY_ERRORS:
-            await ctx.send("ℹ️ Tu es déjà inscrit à ce tournoi.")
-            return
-    await ctx.send(f"✅ {ctx.author.mention}, ton inscription à **{name}** est confirmée ! ({count + 1}/{maximum})")
-
-
-@tournoi.command(name="desinscrire", description="Se désinscrit d'un tournoi CODM")
-@commands.guild_only()
-async def tournoi_desinscrire(ctx: commands.Context, tournament_id: int):
-    with get_connection() as connection:
-        row = connection.execute(
-            "SELECT name, status FROM tournaments WHERE id = ? AND guild_id = ?",
-            (tournament_id, ctx.guild.id),
-        ).fetchone()
-        if not row:
-            await ctx.send("❌ Tournoi introuvable sur ce serveur.")
-            return
-        name, status = row
-        if status != "open":
-            await ctx.send("❌ Tu peux te désinscrire uniquement tant que les inscriptions sont ouvertes.")
-            return
-        cursor = connection.execute(
-            "DELETE FROM tournament_registrations WHERE tournament_id = ? AND user_id = ?",
-            (tournament_id, ctx.author.id),
-        )
-    if cursor.rowcount:
-        await ctx.send(f"✅ Tu es désinscrit de **{name}**.")
-    else:
-        await ctx.send("ℹ️ Tu n'étais pas inscrit à ce tournoi.")
 
 
 @bot.event

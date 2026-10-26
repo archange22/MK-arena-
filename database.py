@@ -2,7 +2,6 @@
 from __future__ import annotations
 import os
 import re
-import sqlite3
 from typing import Any
 import psycopg
 
@@ -11,8 +10,7 @@ if DATABASE_BACKEND not in {"sqlite", "supabase"}:
     raise RuntimeError("DATABASE_BACKEND doit être 'sqlite' ou 'supabase'.")
 DB_PATH = os.getenv("SQLITE_PATH", "mk_arena.db")
 SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL", "").strip()
-INTEGRITY_ERRORS = (sqlite3.IntegrityError, psycopg.IntegrityError)
-_TABLES = ("tournament_registrations", "tournament_config", "guild_settings", "user_xp", "warnings", "tournaments", "tickets")
+_TABLES = ("guild_settings", "user_xp", "warnings", "tickets")
 
 class SupabaseConnection:
     """Small adapter preserving the bot's existing execute/fetch SQL call style."""
@@ -41,6 +39,7 @@ class SupabaseConnection:
 def get_connection():
     """Return a context-managed SQLite or Supabase PostgreSQL connection."""
     if DATABASE_BACKEND == "sqlite":
+        import sqlite3
         return sqlite3.connect(DB_PATH)
     if not SUPABASE_DB_URL:
         raise RuntimeError("DATABASE_BACKEND=supabase exige SUPABASE_DB_URL (URI PostgreSQL privée du projet MK Arena).")
