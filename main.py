@@ -58,7 +58,10 @@ def init_database():
             id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
             channel_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'open',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
-
+        # Remove legacy tournament data from existing local SQLite databases.
+        connection.execute("DROP TABLE IF EXISTS tournament_registrations")
+        connection.execute("DROP TABLE IF EXISTS tournament_config")
+        connection.execute("DROP TABLE IF EXISTS tournaments")
 
 
 @bot.event
