@@ -192,22 +192,16 @@ async def on_message(message: discord.Message):
 
     content = message.content or ""
     mentions_bot = client.user is not None and client.user in message.mentions
-    called_nova = re.search(r"(?<!\w)nova(?!\w)", content, flags=re.IGNORECASE) is not None
+    # Déclenchement insensible à la casse, quelle que soit la position dans le message.
+    called_nova = re.search(r"nova", content, flags=re.IGNORECASE) is not None
     if not (mentions_bot or called_nova):
         return
-
-    # Un seul message de réponse par membre toutes les 5 secondes.
-    now = asyncio.get_running_loop().time()
-    cooldown_key = (message.guild.id, message.author.id)
-    if now - last_reply_at.get(cooldown_key, 0) < 5:
-        return
-    # Réserve le créneau avant le premier await pour éviter les réponses concurrentes.
-    last_reply_at[cooldown_key] = now
 
     prompt = content
     if client.user:
         prompt = prompt.replace(f"<@{client.user.id}>", "").replace(f"<@!{client.user.id}>", "")
-    prompt = re.sub(r"\bnova\b", "", prompt, flags=re.IGNORECASE)
+    # Retire toutes les variantes de NOVA du texte transmis au moteur local.
+    prompt = re.sub(r"nova", "", prompt, flags=re.IGNORECASE)
     prompt = re.sub(r"\s+", " ", prompt).strip(" ,.!?\n\t")
     if not prompt:
         prompt = "Présente-toi brièvement et demande-moi de quoi je veux parler."
