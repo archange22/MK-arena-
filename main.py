@@ -257,7 +257,7 @@ async def aide(ctx: commands.Context):
     )
     embed.add_field(
         name="Général",
-        value="`!ping`\n`!aide`\n`!panel`\n`!serveur`\n`!userinfo [membre]`\n`!avatar [membre]`\n`!profil [membre]`\n`!classement`\n`!ticketpanel`",
+        value="`!ping`\n`!aide`\n`!chat question`\n`!chatreset`\n`!chatinfo`\n`!panel`\n`!serveur`\n`!userinfo [membre]`\n`!avatar [membre]`\n`!profil [membre]`\n`!classement`\n`!ticketpanel`",
         inline=False,
     )
     embed.add_field(
