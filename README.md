@@ -22,14 +22,18 @@ Bot Discord de la communauté MK Arena, développé avec Python et discord.py. T
 
 Les commandes de modération exigent les permissions Discord appropriées pour la personne qui les utilise et pour le bot.
 
-## Déploiement sur Render
+## Déploiement et configuration sur Render
+
+- **Dashboard Render :** https://dashboard.render.com/
+- **Dépôt GitHub :** https://github.com/archange22/MK-arena-
 
 Le fichier `render.yaml` configure un **Background Worker** Python.
 
-1. Ouvrir le tableau de bord Render et connecter ce dépôt GitHub.
-2. Créer le service à partir du Blueprint (`render.yaml`) ou créer un Background Worker avec ce dépôt.
-3. Ajouter la variable d'environnement `DISCORD_TOKEN`, qui contient le token privé du bot.
-4. Lancer le déploiement et vérifier les logs.
+1. Ouvre le [dashboard Render](https://dashboard.render.com/) et sélectionne le service de NOVA. Si aucun service n'existe, crée un service à partir du Blueprint `render.yaml` ou crée un Background Worker depuis ce dépôt.
+2. Ouvre l'onglet **Environment** du service.
+3. Ajoute `DISCORD_TOKEN), qui contient le token privé du bot.
+4. Pour activer la mémoire persistante, ajoute aussi les variables Supabase indiquées dans la section suivante.
+5. Enregistre les changements, laisse Render redémarrer/redéployer le service, puis vérifie les logs pour confirmer que le bot démarre correctement.
 
 Ne jamais committer le token Discord dans GitHub.
 
@@ -37,16 +41,18 @@ Ne jamais committer le token Discord dans GitHub.
 
 Le projet Supabase dédié est `mk-arena` (région `eu-west-1`). La table `public.mk_nova_conversations` conserve le fil partagé de chaque salon : seuls les 30 derniers messages du fil sont conservés, et la mémoire peut être rechargée après un redémarrage.
 
-Pour activer cette fonction sur Render, ajoute ces variables dans **Environment** du service :
+Dans **Render > service NOVA > Environment**, configure ces variables :
 
-- `SUPABASE_URL=https://nkhfaptkrenxtogellhv.supabase.co`
-- `SUPABASE_SECRET_KEY` : une clé **Secret** de ce projet, récupérée dans Supabase Dashboard > Project Settings > API Keys.
+- **Nom :** `SUPABASE_URL`  
+  **Valeur :** `https://nkhfaptkrenxtogellhv.supabase.co`
+- **Nom :** `SUPABASE_SECRET_KEY`  
+  **Valeur :** une clé **Secret** de ce projet, à récupérer dans [Supabase > API Keys](https://supabase.com/dashboard/project/nkhfaptkrenxtogellhv/settings/api-keys).
 
-La variable `SUPABASE_SERVICE_ROLE_KEY` est aussi acceptée à la place de `SUPABASE_SECRET_KEY` pour les anciens projets. N'utilise jamais une clé Secret ou service-role dans le code source, dans GitHub ou dans une application publique. Ne partage pas cette clé dans le chat. La clé doit rester dans les variables privées du service Render.
+La variable `SUPABASE_SERVICE_ROLE_KEY` est aussi acceptée à la place de `SUPABASE_SECRET_KEY` pour les anciens projets. N'utilise jamais une clé Secret ou service-role dans le code source, dans GitHub ou dans une application publique. Ne partage pas cette clé dans le chat. Elle doit rester dans les variables privées du service Render.
 
 La mémoire est organisée par serveur et salon Discord. NOVA ne sauvegarde que les messages auxquels le bot répond, pas tous les messages du salon. Informe les membres que les échanges adressés à NOVA sont conservés dans Supabase.
 
-Sans clé Supabase dans Render, NOVA continue de fonctionner avec une mémoire temporaire en RAM.
+Sans clé Supabase dans Render, NOVA continue de fonctionner avec une mémoire temporaire en RAM. L'ajout des variables ne confirme pas à lui seul que tout fonctionne : vérifie les logs Render après le redémarrage.
 
 ## Développement local
 
