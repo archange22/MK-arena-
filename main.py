@@ -29,6 +29,9 @@ client = discord.Client(intents=intents)
 # Historique court, séparé par membre et salon.
 histories = defaultdict(lambda: deque(maxlen=12))
 last_reply_at = {}
+# Anti-doublon : empêche de traiter deux fois le même message Discord.
+processed_message_ids = deque(maxlen=5000)
+processed_message_id_set = set()
 
 SYSTEM_PROMPT = (
     "Tu es NOVA, un chatbot francophone amical pour une communauté Discord. "
@@ -178,16 +181,27 @@ async def on_message(message: discord.Message):
     if message.author.bot or not message.guild:
         return
 
+    # Même message reçu deux fois : une seule réponse au maximum.
+    if message.id in processed_message_id_set:
+        return
+    if len(processed_message_ids) == processed_message_ids.maxlen:
+        expired_id = processed_message_ids[0]
+        processed_message_id_set.discard(expired_id)
+    processed_message_ids.append(message.id)
+    processed_message_id_set.add(message.id)
+
     content = message.content or ""
     mentions_bot = client.user is not None and client.user in message.mentions
-    called_nova = re.search(r"\bnova\b", content, flags=re.IGNORECASE) is not None
+    called_nova = re.search(r"(?<!\w)nova(?!\w)", content, flags=re.IGNORECASE) is not None
     if not (mentions_bot or called_nova):
         return
 
+    # Un seul message de réponse par membre toutes les 5 secondes.
     now = asyncio.get_running_loop().time()
     cooldown_key = (message.guild.id, message.author.id)
-    if now - last_reply_at.get(cooldown_key, 0) < 3:
+    if now - last_reply_at.get(cooldown_key, 0) < 5:
         return
+    # Réserve le créneau avant le premier await pour éviter les réponses concurrentes.
     last_reply_at[cooldown_key] = now
 
     prompt = content
@@ -201,7 +215,7 @@ async def on_message(message: discord.Message):
     try:
         async with message.channel.typing():
             answer = await generate_reply(prompt, (message.guild.id, message.channel.id, message.author.id))
-        await message.reply(answer[:1800], mention_author=False)
+        await message.reply(answer[:1800], mention_author=False, allowed_mentions=discord.AllowedMentions.none())
     except discord.DiscordException:
         log.exception("Impossible d'envoyer la réponse de NOVA")
 
