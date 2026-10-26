@@ -14,9 +14,11 @@ logging.basicConfig(
 log = logging.getLogger("nova")
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-CHATBOT_API_URL = os.getenv("CHATBOT_API_URL", "").strip()
-CHATBOT_API_KEY = os.getenv("CHATBOT_API_KEY", "").strip()
-CHATBOT_MODEL = os.getenv("CHATBOT_MODEL", "").strip()
+CHATBOT_API_URL = os.getenv(
+    "CHATBOT_API_URL", "https://api.groq.com/openai/v1/chat/completions"
+).strip()
+CHATBOT_API_KEY = os.getenv("GROQ_API_KEY", os.getenv("CHATBOT_API_KEY", "")).strip()
+CHATBOT_MODEL = os.getenv("CHATBOT_MODEL", "openai/gpt-oss-20b").strip()
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -60,7 +62,7 @@ def local_reply(message: str) -> str:
 
 async def generate_reply(prompt: str, key: tuple) -> str:
     history = histories[key]
-    if CHATBOT_API_URL and CHATBOT_MODEL:
+    if CHATBOT_API_URL and CHATBOT_MODEL and CHATBOT_API_KEY:
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages.extend(list(history))
         messages.append({"role": "user", "content": prompt[:1800]})
@@ -88,9 +90,13 @@ async def generate_reply(prompt: str, key: tuple) -> str:
                             history.append({"role": "assistant", "content": answer[:1800]})
                             return answer[:1800]
                     else:
-                        log.warning("Endpoint NOVA HTTP %s", response.status)
+                        details = (await response.text())[:300]
+                        log.warning("Endpoint NOVA HTTP %s: %s", response.status, details)
         except (aiohttp.ClientError, asyncio.TimeoutError, KeyError, IndexError, TypeError, ValueError):
             log.warning("Endpoint NOVA indisponible, réponse locale utilisée.", exc_info=True)
+
+    if CHATBOT_API_URL and CHATBOT_MODEL and not CHATBOT_API_KEY:
+        log.warning("Aucune clé IA configurée : définis GROQ_API_KEY dans les variables Render.")
 
     answer = local_reply(prompt)
     history.append({"role": "user", "content": prompt[:1800]})
