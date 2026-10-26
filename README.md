@@ -33,6 +33,21 @@ Le fichier `render.yaml` configure un **Background Worker** Python.
 
 Ne jamais committer le token Discord dans GitHub.
 
+## Mémoire persistante de NOVA avec Supabase
+
+Le projet Supabase dédié est `mk-arena` (région `eu-west-1`). La table `public.mk_nova_conversations` conserve le fil partagé de chaque salon : seuls les 30 derniers messages du fil sont conservés, et la mémoire peut être rechargée après un redémarrage.
+
+Pour activer cette fonction sur Render, ajoute ces variables dans **Environment** du service :
+
+- `SUPABASE_URL=https://nkhfaptkrenxtogellhv.supabase.co`
+- `SUPABASE_SECRET_KEY` : une clé **Secret** de ce projet, récupérée dans Supabase Dashboard > Project Settings > API Keys.
+
+La variable `SUPABASE_SERVICE_ROLE_KEY` est aussi acceptée à la place de `SUPABASE_SECRET_KEY` pour les anciens projets. N'utilise jamais une clé Secret ou service-role dans le code source, dans GitHub ou dans une application publique. Ne partage pas cette clé dans le chat. La clé doit rester dans les variables privées du service Render.
+
+La mémoire est organisée par serveur et salon Discord. NOVA ne sauvegarde que les messages auxquels le bot répond, pas tous les messages du salon. Informe les membres que les échanges adressés à NOVA sont conservés dans Supabase.
+
+Sans clé Supabase dans Render, NOVA continue de fonctionner avec une mémoire temporaire en RAM.
+
 ## Développement local
 
 Installer les dépendances :
