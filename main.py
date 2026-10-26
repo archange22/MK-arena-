@@ -2,7 +2,12 @@ import os
 import logging
 import sqlite3
 import time
+import re
+import asyncio
+from collections import defaultdict, deque
 from datetime import timedelta
+
+import aiohttp
 
 import discord
 from discord.ext import commands
@@ -25,6 +30,10 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 database_ready = False
 slash_commands_synced = False
 persistent_views_registered = False
+chat_histories = defaultdict(lambda: deque(maxlen=8))
+CHATBOT_API_URL = os.getenv("CHATBOT_API_URL", "").strip()
+CHATBOT_API_KEY = os.getenv("CHATBOT_API_KEY", "").strip()
+CHATBOT_MODEL = os.getenv("CHATBOT_MODEL", "").strip()
 
 
 def init_database():
@@ -84,6 +93,9 @@ def init_database():
             id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
             channel_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'open',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
+        connection.execute("""CREATE TABLE IF NOT EXISTS chatbot_usage (
+            guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL, last_used REAL NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id))""")
 
 
 
@@ -112,6 +124,120 @@ async def on_ready():
         bot.user.id if bot.user else "unknown",
         len(bot.guilds),
     )
+
+
+
+# --- MK Arena Hybrid Chatbot ---
+CHATBOT_SYSTEM_PROMPT = (
+    "Tu es MK Arena AI, assistant Discord francophone spécialisé COD Mobile et MK Arena. "
+    "Réponds naturellement sur les modes, réglages, stratégies, tournois et commandes. "
+    "Ne prétends pas connaître les mises à jour en direct. Ne révèle pas de secrets ou données privées. "
+    "Ne réalise jamais d'action de modération ou d'administration depuis une conversation."
+)
+
+
+def _chat_intent_reply(question: str, guild: discord.Guild | None = None) -> str:
+    q = re.sub(r"\\s+", " ", question.lower()).strip()
+    if not q:
+        return "Pose une question après !chat, par exemple : !chat comment progresser en ranked ?"
+    if any(w in q for w in ("bonjour", "salut", "hello", "bonsoir", "coucou")):
+        return "Salut ! 🎮 Je suis MK Arena AI. On parle de stratégie CODM, réglages, modes de jeu ou tournois ?"
+    if any(w in q for w in ("qui es-tu", "qui est tu", "ton nom", "tu es qui")):
+        return "Je suis MK Arena AI, l'assistant gaming de la communauté. Je peux aider sur COD Mobile, les tournois et les commandes du serveur. 🤖"
+    if any(w in q for w in ("sensibilité", "sensibilite", "réglage", "reglage", "hud", "gyroscope", "dpi")):
+        return ("🎯 Réglages CODM : pars d'une sensibilité moyenne, puis change un paramètre à la fois. "
+                "Teste caméra, tir et gyroscope séparément. Le bon réglage dépend de ton appareil et de ta façon de jouer. "
+                "Tu joues avec combien de doigts ?")
+    if any(w in q for w in ("ranked", "classé", "classe", "rank", "légendaire", "legendary")):
+        return ("🏆 Ranked : communique avec ton équipe, apprends les rotations, évite les duels inutiles et joue l'objectif. "
+                "En Domination, contrôle les zones; en Point stratégique, anticipe la rotation. Quel mode joues-tu ?")
+    if any(w in q for w in ("arme", "loadout", "accessoire", "meta")):
+        return ("🔫 Choisis une arme adaptée à la carte et à ton rôle. Teste recul, vitesse de visée et mobilité au stand de tir. "
+                "Tu préfères AR, SMG, sniper ou fusil à pompe ? La méta change selon les saisons.")
+    if any(w in q for w in ("battle royale", "alcatraz", "mode br", "br ")):
+        return ("🪂 Battle Royale : choisis une zone d'atterrissage adaptée, récupère vite arme et armure, garde une option "
+                "de rotation et communique avant d'engager. En équipe, reste à portée de soutien.")
+    if any(w in q for w in ("tournoi", "inscription", "inscrire", "match", "compétition")):
+        try:
+            with sqlite3.connect(DB_PATH) as connection:
+                rows = connection.execute(
+                    "SELECT id, name, max_players FROM tournaments WHERE guild_id = ? AND status = 'open' ORDER BY id DESC LIMIT 5",
+                    (guild.id,),
+                ).fetchall() if guild else []
+            if rows:
+                return "🏆 Tournois ouverts :\\n" + "\\n".join(
+                    f"• #{r[0]} {r[1]} · {r[2]} places" for r in rows
+                ) + "\\nUtilise !aide pour les commandes d'inscription."
+        except sqlite3.Error:
+            log.exception("Erreur de lecture des tournois")
+        return "🏆 Ouvre !panel puis Tournois CODM. !aide liste les commandes d'inscription. Si aucun tournoi n'est ouvert, contacte un organisateur."
+    if any(w in q for w in ("commande", "panel", "aide", "ticket", "règle", "regle", "serveur")):
+        return ("🛠️ !panel ouvre le centre de contrôle, !aide liste les commandes, !profil affiche ton XP et "
+                "!classement montre le classement. !ticketpanel publie le support pour les membres autorisés. "
+                "Je ne peux pas exécuter une action administrative juste sur demande dans le chat.")
+    if any(w in q for w in ("stratégie", "strategie", "conseil", "progresser", "débutant", "debutant", "améliorer", "ameliorer")):
+        return ("🎮 Pour progresser : échauffe-toi brièvement, travaille une compétence à la fois, analyse tes erreurs, "
+                "joue l'objectif et communique. Tu veux progresser en MJ classé, Battle Royale ou au sniper ?")
+    if "merci" in q or "thanks" in q:
+        return "Avec plaisir ! 🎮 Pose-moi une question plus précise sur CODM ou MK Arena."
+    return ("Je peux aider sur COD Mobile (armes, sensibilité, ranked, Battle Royale, stratégies), les tournois "
+            "et les commandes MK Arena. Essaie : Comment mieux jouer en Point stratégique ?")
+
+
+async def generate_chatbot_reply(question: str, guild: discord.Guild | None, history_key: tuple) -> str:
+    history = chat_histories[history_key]
+    if CHATBOT_API_URL and CHATBOT_MODEL:
+        messages = [{"role": "system", "content": CHATBOT_SYSTEM_PROMPT}]
+        messages.extend(list(history))
+        messages.append({"role": "user", "content": question[:1500]})
+        headers = {"Content-Type": "application/json"}
+        if CHATBOT_API_KEY:
+            headers["Authorization"] = f"Bearer {CHATBOT_API_KEY}"
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12)) as session:
+                async with session.post(
+                    CHATBOT_API_URL, headers=headers,
+                    json={"model": CHATBOT_MODEL, "messages": messages, "temperature": 0.65, "max_tokens": 350},
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        answer = data["choices"][0]["message"]["content"].strip()
+                        if answer:
+                            history.append({"role": "user", "content": question[:1500]})
+                            history.append({"role": "assistant", "content": answer[:1800]})
+                            return answer[:1800]
+                    else:
+                        log.warning("Chatbot API HTTP %s; moteur local utilisé", response.status)
+        except (aiohttp.ClientError, asyncio.TimeoutError, KeyError, IndexError, TypeError, ValueError):
+            log.warning("API chatbot indisponible; moteur local utilisé.", exc_info=True)
+    answer = _chat_intent_reply(question, guild)
+    history.append({"role": "user", "content": question[:1500]})
+    history.append({"role": "assistant", "content": answer[:1800]})
+    return answer[:1800]
+
+
+@bot.command(name="chat", aliases=["ask", "ia"], description="Discute avec MK Arena AI")
+@commands.cooldown(1, 4, commands.BucketType.user)
+async def chat(ctx: commands.Context, *, question: str):
+    answer = await generate_chatbot_reply(question, ctx.guild, (ctx.guild.id if ctx.guild else 0, ctx.author.id))
+    embed = discord.Embed(title="🤖 MK Arena AI", description=answer, color=discord.Color.blurple())
+    embed.set_footer(text="Assistant gaming • Réponses automatiques")
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@bot.command(name="chatreset", description="Efface le contexte de conversation local")
+async def chatreset(ctx: commands.Context):
+    chat_histories.pop((ctx.guild.id if ctx.guild else 0, ctx.author.id), None)
+    await ctx.reply("🧹 Ton contexte de conversation a été effacé.", mention_author=False)
+
+
+@bot.command(name="chatinfo", description="Affiche le mode actuel du chatbot")
+async def chatinfo(ctx: commands.Context):
+    mode = f"Endpoint IA compatible OpenAI configuré ({CHATBOT_MODEL})." if CHATBOT_API_URL and CHATBOT_MODEL else "Mode local gratuit, sans clé API."
+    embed = discord.Embed(title="🤖 MK Arena AI • État", description=mode, color=discord.Color.blurple())
+    embed.add_field(name="Comment parler", value="!chat ta question ou mentionne le bot.", inline=False)
+    embed.add_field(name="Mémoire", value="Contexte court en mémoire pendant l'exécution du bot.", inline=False)
+    await ctx.send(embed=embed)
 
 
 @bot.command(name="ping", description="Vérifie si MK Arena répond")
@@ -1016,6 +1142,34 @@ async def on_message(message: discord.Message):
                         "UPDATE user_xp SET xp = ?, level = ?, last_message_at = ? WHERE guild_id = ? AND user_id = ?",
                         (xp, level, now, message.guild.id, message.author.id),
                     )
+    # Réponse automatique seulement si le bot est mentionné ou si le salon est dédié au chat.
+    is_command = message.content.startswith("!")
+    dedicated = message.channel.name.lower() in {"parler-a-mk", "parler-à-mk", "chat-mk", "mk-chat"}
+    mentioned = bot.user is not None and bot.user in message.mentions
+    if not is_command and (dedicated or mentioned):
+        question = message.content
+        if bot.user:
+            question = question.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
+        key = (message.guild.id, message.author.id)
+        with sqlite3.connect(DB_PATH) as connection:
+            row = connection.execute(
+                "SELECT last_used FROM chatbot_usage WHERE guild_id = ? AND user_id = ?",
+                (message.guild.id, message.author.id),
+            ).fetchone()
+            allowed = not row or time.time() - row[0] >= 4
+            if allowed:
+                connection.execute(
+                    "INSERT INTO chatbot_usage (guild_id, user_id, last_used) VALUES (?, ?, ?) "
+                    "ON CONFLICT(guild_id, user_id) DO UPDATE SET last_used = excluded.last_used",
+                    (message.guild.id, message.author.id, time.time()),
+                )
+        if allowed and question:
+            try:
+                async with message.channel.typing():
+                    answer = await generate_chatbot_reply(question, message.guild, key)
+                await message.reply(answer[:1800], mention_author=False)
+            except discord.DiscordException:
+                log.exception("Réponse automatique du chatbot impossible")
     await bot.process_commands(message)
 
 
