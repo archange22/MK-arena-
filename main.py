@@ -178,8 +178,18 @@ def local_reply(message: str, history=None) -> str:
 
     # Continuité conversationnelle simple
     previous_user = last_user_message()
-    if has_any(text, ("et toi", "et alors", "ensuite", "apres", "continue", "continue stp")):
-        return "Je peux continuer 😊 Tu veux que je développe le dernier sujet ou que je passe à une autre idée ?"
+    if has_any(text, ("et toi", "et alors", "ensuite", "apres", "continue", "continue stp", "developpe", "explique plus")):
+        last_assistant = next((item.get("content", "") for item in reversed(history) if item.get("role") == "assistant"), "")
+        if last_assistant:
+            return "Je développe 😊 Voici le point précédent : " + last_assistant[:650] + "\n\nQuelle partie veux-tu approfondir ?"
+        return "Je peux continuer 😊 Donne-moi le sujet à développer."
+    if text in ("hein", "quoi", "comment", "pourquoi", "explique", "vas y", "vazy"):
+        last_assistant = next((item.get("content", "") for item in reversed(history) if item.get("role") == "assistant"), "")
+        if last_assistant:
+            return "Tu veux que je précise ma réponse précédente ? 😊 " + last_assistant[:500]
+        return "Tu veux que je t’explique quoi exactement ? Donne-moi le sujet."
+    if has_any(text, ("et ensuite", "et apres", "comment ca marche")) and previous_user:
+        return f"Tu fais référence à « {previous_user[:160]} » ? Je peux expliquer la suite ou le fonctionnement. Tu préfères quoi ?"
     if len(words) <= 3:
         return choose([
             f"J'ai noté « {raw[:120]} ». Tu peux m'en dire un peu plus pour que je comprenne mieux ?",
