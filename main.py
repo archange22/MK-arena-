@@ -159,6 +159,34 @@ def local_reply(message: str, history=None) -> str:
     if has_any(text, ("je suis content", "je suis heureux", "bonne nouvelle", "j'ai reussi", "ça a marché", "ca a marche")):
         return choose(["Excellent ! 🎉 Raconte, qu'est-ce qui s'est passé ?", "Ça fait plaisir à lire 😊 Qu'est-ce qui a bien marché ?", "Bien joué ! Tu veux me raconter la suite ?"])
 
+    # Relances conversationnelles pour le moteur local, sans API externe.
+    previous_assistant = next(
+        (item.get("content", "") for item in reversed(history) if item.get("role") == "assistant"),
+        "",
+    )
+    short_followups = {
+        "pourquoi", "pourquoi", "comment ca", "et apres", "et ensuite",
+        "developpe", "explique plus", "explique mieux", "donne un exemple",
+        "un exemple", "et donc", "oui mais", "continue", "continue stp",
+    }
+    if text in short_followups and previous_assistant:
+        previous_excerpt = re.sub(r"\\s+", " ", previous_assistant).strip()[:500]
+        if text in {"developpe", "explique plus", "explique mieux", "continue", "continue stp"}:
+            return (
+                "Je reprends le fil de la discussion 😊 Mon point précédent était : "
+                f"« {previous_excerpt} ». Je peux l'approfondir avec plus de détails et un exemple. "
+                "Quelle partie veux-tu comprendre en priorité ?"
+            )
+        if text in {"donne un exemple", "un exemple"}:
+            return (
+                "Bien sûr 😊 Pour illustrer notre échange, je pars de ce que je viens de dire : "
+                f"« {previous_excerpt} ». Je peux ensuite adapter l'exemple si tu me précises le cas qui t'intéresse."
+            )
+        return (
+            "Je relie ta question à notre échange précédent 😊 Le dernier point était : "
+            f"« {previous_excerpt} ». Tu veux que je précise la raison, le fonctionnement ou la conséquence ?"
+        )
+
     # Demandes directes et questions courantes
     if has_any(text, ("oui", "exact", "c'est ca", "voila", "d'accord", "ok", "okay", "ouais", "yep")) and len(words) <= 4:
         return choose(["D'accord 😊 On continue.", "Ça marche ! Quelle est la suite ?", "Compris. Qu'est-ce que tu veux faire maintenant ?"])
