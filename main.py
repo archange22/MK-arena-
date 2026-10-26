@@ -3,6 +3,7 @@ import logging
 import re
 import asyncio
 import random
+import difflib
 import unicodedata
 from collections import defaultdict, deque
 
@@ -45,21 +46,38 @@ SYSTEM_PROMPT = (
 
 
 def normalize_text(value: str) -> str:
-    """Normalise accents et espaces pour mieux reconnaître le français informel."""
+    """Normalise accents et quelques abréviations du français informel."""
     value = unicodedata.normalize("NFKD", value.lower())
     value = "".join(char for char in value if not unicodedata.combining(char))
     value = re.sub(r"[^a-z0-9\s']", " ", value)
+    value = re.sub(r"\s+", " ", value).strip()
+    slang = {"slt": "salut", "bjr": "bonjour", "bsr": "bonsoir", "cc": "coucou",
+             "pk": "pourquoi", "pq": "pourquoi", "pcq": "parce que", "koi": "quoi",
+             "chui": "je suis", "jsuis": "je suis", "tkt": "ne t inquiete pas",
+             "thx": "merci", "ty": "merci", "ptdr": "mort de rire", "mdr": "mort de rire"}
+    for short, expanded in slang.items():
+        value = re.sub(r"(?<!\w)" + re.escape(short) + r"(?!\w)", expanded, value)
     return re.sub(r"\s+", " ", value).strip()
 
 
 def has_any(text: str, phrases: tuple[str, ...]) -> bool:
-    """Recherche des expressions entières, sans confondre des mots partiels."""
-    return any(
-        re.search(r"(?<!\w)" + re.escape(normalize_text(phrase)) + r"(?!\w)", text)
-        for phrase in phrases
-    )
-
-
+    """Recherche les expressions entières et tolère quelques petites fautes."""
+    targets = [normalize_text(phrase) for phrase in phrases]
+    for phrase in targets:
+        if re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", text):
+            return True
+    tokens = text.split()
+    for phrase in targets:
+        target = phrase.split()
+        if not target or not all(len(word) >= 5 for word in target):
+            continue
+        for index in range(max(0, len(tokens) - len(target) + 1)):
+            candidate = tokens[index:index + len(target)]
+            if all(len(word) >= 5 for word in candidate):
+                score = difflib.SequenceMatcher(None, " ".join(candidate), " ".join(target)).ratio()
+                if score >= 0.86:
+                    return True
+    return False
 def local_reply(message: str, history=None) -> str:
     """Moteur conversationnel local avec intentions, variantes et mémoire courte."""
     raw = re.sub(r"\s+", " ", message).strip()
