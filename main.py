@@ -137,7 +137,7 @@ CHATBOT_SYSTEM_PROMPT = (
 
 
 def _chat_intent_reply(question: str, guild: discord.Guild | None = None) -> str:
-    q = re.sub(r"\\s+", " ", question.lower()).strip()
+    q = re.sub(r"\s+", " ", question.lower()).strip()
     if not q:
         return "Pose une question après !chat, par exemple : !chat comment progresser en ranked ?"
     if any(w in q for w in ("bonjour", "salut", "hello", "bonsoir", "coucou")):
@@ -165,9 +165,9 @@ def _chat_intent_reply(question: str, guild: discord.Guild | None = None) -> str
                     (guild.id,),
                 ).fetchall() if guild else []
             if rows:
-                return "🏆 Tournois ouverts :\\n" + "\\n".join(
+                return "🏆 Tournois ouverts :\n" + "\n".join(
                     f"• #{r[0]} {r[1]} · {r[2]} places" for r in rows
-                ) + "\\nUtilise !aide pour les commandes d'inscription."
+                ) + "\nUtilise !aide pour les commandes d'inscription."
         except sqlite3.Error:
             log.exception("Erreur de lecture des tournois")
         return "🏆 Ouvre !panel puis Tournois CODM. !aide liste les commandes d'inscription. Si aucun tournoi n'est ouvert, contacte un organisateur."
