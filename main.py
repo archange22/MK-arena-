@@ -2,6 +2,7 @@ import os
 import logging
 import re
 import asyncio
+import random
 import unicodedata
 from collections import defaultdict, deque
 
@@ -60,74 +61,117 @@ def has_any(text: str, phrases: tuple[str, ...]) -> bool:
 
 
 def local_reply(message: str, history=None) -> str:
-    """Petit moteur local par intentions : sans clé ni appel à une API externe."""
+    """Moteur conversationnel local avec intentions, variantes et mémoire courte."""
     raw = re.sub(r"\s+", " ", message).strip()
     text = normalize_text(raw)
     words = set(text.split())
+    history = list(history or [])
 
-    if not text:
-        return "Je suis là 😊 Dis-moi ce que tu as en tête."
+    def choose(options):
+        return random.choice(options)
 
-    # Salutations et présentations
-    if has_any(text, ("qui es tu", "tu es qui", "c'est quoi nova", "ton nom", "presente toi", "presente toi")):
-        return "Je suis NOVA, le chatbot de MK Arena 🤖. Je peux discuter, expliquer des idées et t'aider à réfléchir. Pour l'instant, je fonctionne sans modèle IA externe, donc mes connaissances restent limitées."
-    if has_any(text, ("bonjour", "salut", "hello", "bonsoir", "coucou", "yo", "wesh")):
-        return "Salut ! 😊 Quoi de neuf ? Tu veux parler de quoi ?"
-    if has_any(text, ("ca va", "comment vas tu", "comment tu vas", "tu vas bien")):
-        return "Ça va bien côté NOVA 🤖 Merci de demander ! Et toi, comment ça se passe ?"
-    if has_any(text, ("merci", "thanks", "bien joue", "bravo")):
-        return "Avec plaisir ! 😊"
-    if has_any(text, ("au revoir", "a plus", "bonne nuit", "a demain", "je dois partir")):
-        return "À plus ! 👋 Je serai là quand tu voudras reprendre la discussion."
-
-    # Comprendre ce que la personne attend de NOVA
-    if has_any(text, ("que peux tu faire", "tu sais faire quoi", "aide moi", "aide moi stp", "comment tu fonctionnes")):
-        return "Je peux discuter, proposer des idées, expliquer un sujet et t'aider à organiser un projet. Je suis encore en mode local : je reconnais plusieurs intentions, mais je n'ai pas encore la compréhension générale d'un grand modèle IA."
-    if has_any(text, ("tu comprends", "tu comprends rien", "tu es bete", "tu es nul")):
-        return "Je suis encore en apprentissage côté code 😅 Sans moteur IA externe, je comprends surtout les intentions que mes règles reconnaissent. Reformule avec un peu de contexte et je vais essayer de mieux cibler ta demande."
-    if has_any(text, ("repete", "redis", "qu'est ce que tu viens de dire", "tu as dit quoi")):
-        if history:
-            previous = next((item.get("content", "") for item in reversed(history) if item.get("role") == "assistant"), "")
-            if previous:
-                return "Ma réponse précédente était : " + previous[:900]
-        return "Je n'ai pas encore de réponse précédente à répéter dans cette conversation."
-
-    # Conversation générale
-    if has_any(text, ("blague", "fais moi rire", "raconte une blague")):
-        return "Pourquoi les programmeurs confondent-ils Halloween et Noël ? Parce que OCT 31 = DEC 25. 🎃"
-    if has_any(text, ("je m'ennuie", "je m'ennuie", "ennuye", "je sais pas quoi faire")):
-        return "On peut trouver un truc sympa 😊 Tu préfères discuter, inventer une idée, parler de jeux vidéo ou faire un petit quiz ?"
-    if has_any(text, ("je suis triste", "pas le moral", "je vais mal", "je suis stresse", "je suis stressé")):
-        return "Désolé que tu traverses ça. 💛 Tu veux me raconter ce qui se passe ? Je peux t'écouter et t'aider à mettre les choses au clair."
-    if has_any(text, ("tu es une ia", "tu es un robot", "tu es humain", "tu es humaine")):
-        return "Je suis un bot logiciel, pas une personne. 🤖 Pour le moment, mes réponses viennent de règles locales plutôt que d'un modèle génératif."
-    if has_any(text, ("pourquoi", "comment", "explique", "c'est quoi", "qu'est ce que", "definition")):
-        topic = raw[:180].strip()
-        return (
-            f"Tu veux comprendre : « {topic} ». Je vois le type de question, mais mon mode local ne possède pas encore assez de connaissances pour expliquer correctement tous les sujets. "
-            "Donne-moi un peu plus de contexte, ou un choix précis, et je tenterai de t'orienter sans inventer une réponse."
+    def last_user_message():
+        return next(
+            (item.get("content", "") for item in reversed(history) if item.get("role") == "user"),
+            "",
         )
 
-    # Détection de thèmes pour éviter une réponse identique à chaque fois.
-    if has_any(text, ("codm", "call of duty", "mobile", "blood strike", "free fire", "jeu", "gaming", "game")):
-        return "Tu parles de jeux vidéo 🎮. Tu veux plutôt des conseils pour progresser, parler d'un jeu précis ou trouver une idée de défi ?"
-    if has_any(text, ("ecole", "devoir", "cours", "exercice", "revision", "examen")):
-        return "On peut travailler sur ça 📚. Envoie la consigne ou dis-moi la matière, et je t'aiderai à découper le problème étape par étape."
-    if has_any(text, ("discord", "serveur", "salon", "role", "bot")):
-        return "Pour Discord, je peux t'aider à réfléchir à l'organisation du serveur ou au comportement du bot. Tu veux parler de quel élément exactement ?"
-    if has_any(text, ("site web", "application", "programmer", "code", "github", "developper", "developpement", "ia")):
-        return "Tu parles de création numérique 💻. Tu veux concevoir une idée, comprendre du code ou corriger un problème ? Donne-moi le détail important."
-    if has_any(text, ("oui", "exact", "c'est ca", "voila", "d'accord", "ok")):
-        return "D'accord 😊. Dis-moi ce que tu veux faire ensuite."
-    if has_any(text, ("non", "pas ca", "tu te trompes", "c'est faux")):
-        return "Merci de me corriger. 😊 Qu'est-ce que j'ai mal compris ? Je vais ajuster ma réponse."
+    if not text:
+        return choose([
+            "Je t'écoute 😊 Tu voulais me demander quelque chose ?",
+            "Je suis là ! Donne-moi un sujet et on en parle.",
+            "À toi la parole 🤖 Qu'est-ce que tu as en tête ?",
+        ])
+
+    # Identité et capacités
+    if has_any(text, ("qui es tu", "tu es qui", "c'est quoi nova", "ton nom", "presente toi", "qui est nova")):
+        return "Je suis NOVA, le chatbot de MK Arena 🤖. Je peux discuter, proposer des idées et t'aider à réfléchir. Je fonctionne actuellement avec des règles locales, donc je peux encore mal comprendre certaines demandes."
+    if has_any(text, ("que peux tu faire", "tu sais faire quoi", "aide moi", "comment tu fonctionnes", "tes capacites", "tu peux faire quoi")):
+        return "Je peux discuter, aider à organiser une idée, parler de jeux, de Discord, de cours ou de programmation. Explique-moi ton objectif et je te dirai ce que je peux faire, sans prétendre avoir des capacités que je n'ai pas."
+
+    # Salutations, humeur et politesse
+    if has_any(text, ("bonjour", "salut", "hello", "bonsoir", "coucou", "yo", "wesh", "slt", "bjr", "cc")):
+        return choose([
+            "Salut ! 😊 Quoi de neuf ?",
+            "Hey ! NOVA est là 🤖 On parle de quoi ?",
+            "Yo 👋 Comment se passe ta journée ?",
+            "Salut ! Balance ton sujet, je t'écoute.",
+        ])
+    if has_any(text, ("ca va", "comment vas tu", "comment tu vas", "tu vas bien", "la forme")):
+        return choose([
+            "Ça va bien côté NOVA 🤖 Merci ! Et toi, comment ça se passe ?",
+            "Toujours opérationnelle 😊 Et toi, la forme ?",
+            "Tout roule dans mes circuits ! Et de ton côté ?",
+        ])
+    if has_any(text, ("merci", "thanks", "bien joue", "bravo", "merci beaucoup", "thx", "ty")):
+        return choose(["Avec plaisir ! 😊", "Pas de souci, je suis là pour ça.", "Content que ça t'aide ! 🤖", "Quand tu veux !"])
+    if has_any(text, ("au revoir", "a plus", "bonne nuit", "a demain", "je dois partir", "bye", "bonne journee")):
+        return choose(["À plus ! 👋", "Bonne continuation, on reprendra quand tu voudras.", "Prends soin de toi et à bientôt ! 👋"])
+
+    # Questions sur NOVA et réactions à ses réponses
+    if has_any(text, ("tu comprends", "tu comprends rien", "tu es bete", "tu es nul", "tu as rien compris", "t'as pas compris")):
+        return "Possible que j'aie mal compris 😅 Dis-moi ce que tu voulais dire ou donne un exemple, et je vais essayer de corriger le tir."
+    if has_any(text, ("repete", "redis", "qu'est ce que tu viens de dire", "tu as dit quoi", "repete stp")):
+        previous = next((item.get("content", "") for item in reversed(history) if item.get("role") == "assistant"), "")
+        return "Ma réponse précédente : " + previous[:900] if previous else "Je n'ai pas encore de réponse précédente à répéter ici."
+    if has_any(text, ("tu es une ia", "tu es un robot", "tu es humain", "tu es humaine", "tu es reel")):
+        return "Je suis un bot logiciel, pas une personne. 🤖 Pour le moment, je réponds grâce à des règles locales et, seulement si une clé API est configurée, à un modèle externe."
+
+    # Petites conversations et soutien
+    if has_any(text, ("blague", "fais moi rire", "raconte une blague", "une blague")):
+        return choose([
+            "Pourquoi les programmeurs confondent-ils Halloween et Noël ? Parce que OCT 31 = DEC 25. 🎃",
+            "Pourquoi le développeur aime-t-il le noir ? Parce que la lumière attire les bugs. 🐛",
+            "Un ordinateur entre dans un bar. Le barman dit : « Désolé, on ne sert pas les processeurs. » 🤖",
+        ])
+    if has_any(text, ("je m'ennuie", "ennuye", "je sais pas quoi faire", "rien a faire")):
+        return "On peut trouver un truc sympa 😊 Tu préfères parler de jeux vidéo, inventer un projet, faire un quiz ou simplement discuter ?"
+    if has_any(text, ("je suis triste", "pas le moral", "je vais mal", "je suis stresse", "je suis stressé", "je suis fatigue", "j'ai peur", "je suis inquiet")):
+        return "Désolé que tu te sentes comme ça 💛 Si tu veux, raconte-moi ce qui se passe. Je peux t'écouter et t'aider à réfléchir à la prochaine petite étape."
+    if has_any(text, ("je suis content", "je suis heureux", "bonne nouvelle", "j'ai reussi", "ça a marché", "ca a marche")):
+        return choose(["Excellent ! 🎉 Raconte, qu'est-ce qui s'est passé ?", "Ça fait plaisir à lire 😊 Qu'est-ce qui a bien marché ?", "Bien joué ! Tu veux me raconter la suite ?"])
+
+    # Demandes directes et questions courantes
+    if has_any(text, ("oui", "exact", "c'est ca", "voila", "d'accord", "ok", "okay", "ouais", "yep")) and len(words) <= 4:
+        return choose(["D'accord 😊 On continue.", "Ça marche ! Quelle est la suite ?", "Compris. Qu'est-ce que tu veux faire maintenant ?"])
+    if has_any(text, ("non", "pas ca", "tu te trompes", "c'est faux", "non pas du tout")) and len(words) <= 7:
+        return "Merci de me corriger. 😊 Dis-moi ce qui est faux ou ce que tu voulais dire, et je vais ajuster ma réponse."
+    if has_any(text, ("pourquoi", "comment", "explique", "c'est quoi", "qu'est ce que", "definition", "ca veut dire", "signifie")):
+        return (
+            f"Ta question porte sur : « {raw[:180]} ». Je peux repérer le type de question, mais mon mode local ne connaît pas tous les sujets. "
+            "Ajoute le contexte ou précise ce que tu veux savoir, et je ferai de mon mieux sans inventer de faits."
+        )
+
+    # Domaines connus : réponses plus ciblées
+    if has_any(text, ("codm", "call of duty", "blood strike", "free fire", "jeu", "gaming", "game", "minecraft", "roblox", "fortnite", "football", "basket")):
+        return choose([
+            "On part sur le gaming 🎮 Tu veux parler de stratégie, de réglages, de progression ou d'un jeu précis ?",
+            "Sujet jeux vidéo détecté 🎮 Dis-moi le jeu et ton objectif, et je t'aiderai à trouver une piste.",
+            "Gaming time ! 🎮 Tu cherches des conseils, une idée de défi ou juste une discussion sur un jeu ?",
+        ])
+    if has_any(text, ("ecole", "devoir", "cours", "exercice", "revision", "examen", "math", "francais", "anglais", "histoire", "geographie", "physique", "chimie")):
+        return "On s'y met 📚 Envoie l'énoncé ou précise la matière et ce que tu ne comprends pas. Je peux t'expliquer les étapes."
+    if has_any(text, ("discord", "serveur", "salon", "role", "bot", "commande slash", "moderation")):
+        return "Pour Discord, je peux t'aider à réfléchir à la structure d'un serveur, aux rôles ou au code d'un bot. Quel problème précis veux-tu régler ?"
+    if has_any(text, ("site web", "application", "programmer", "code", "github", "developper", "developpement", "ia", "intelligence artificielle", "api", "python", "javascript", "html", "css")):
+        return "On parle de création numérique 💻 Dis-moi ce que tu construis, le résultat attendu et, si tu as une erreur, copie son message exact."
+    if has_any(text, ("ami", "amie", "amour", "dispute", "relation", "personne me parle", "je me sens seul")):
+        return "Les relations peuvent être compliquées. 💛 Si tu veux, explique-moi la situation et ce que tu aimerais voir changer. On peut réfléchir à plusieurs options."
+
+    # Continuité conversationnelle simple
+    previous_user = last_user_message()
+    if has_any(text, ("et toi", "et alors", "ensuite", "apres", "continue", "continue stp")):
+        return "Je peux continuer 😊 Tu veux que je développe le dernier sujet ou que je passe à une autre idée ?"
     if len(words) <= 3:
-        return f"J'ai compris ton message : « {raw[:120]} ». Tu peux ajouter un peu de contexte pour que je cerne mieux ce que tu veux ?"
+        return choose([
+            f"J'ai noté « {raw[:120]} ». Tu peux m'en dire un peu plus pour que je comprenne mieux ?",
+            f"Tu parles de « {raw[:120]} » : tu veux une explication, un conseil ou juste en discuter ?",
+            "Je t'écoute. Ajoute un peu de contexte et je pourrai mieux viser.",
+        ])
 
     return (
-        f"Si je comprends bien, tu me parles de : « {raw[:220]} ». "
-        "Je ne veux pas faire semblant de tout savoir : sans modèle IA externe, mon cerveau local reste limité. "
-        "Précise le résultat que tu attends, et je chercherai la meilleure réponse parmi mes capacités actuelles."
+        f"Si je comprends bien, tu veux parler de : « {raw[:220]} ». "
+        "Je ne suis pas sûr d'avoir saisi l'objectif exact. Tu veux une explication, des conseils, une solution ou un avis ?"
     )
 
 async def generate_reply(prompt: str, key: tuple) -> str:
