@@ -64,9 +64,11 @@ async def load_persistent_history(key: tuple, history) -> None:
         return
     headers = {
         "apikey": SUPABASE_SECRET_KEY,
-        "Authorization": f"Bearer {SUPABASE_SECRET_KEY}",
         "Accept": "application/json",
     }
+    # Les nouvelles clés sb_secret_* ne sont pas des JWT : ne pas les envoyer en Bearer.
+    if not SUPABASE_SECRET_KEY.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {SUPABASE_SECRET_KEY}"
     params = {
         "select": "history",
         "guild_id": f"eq.{key[0]}",
@@ -100,10 +102,12 @@ async def save_persistent_history(key: tuple, history) -> None:
         return
     headers = {
         "apikey": SUPABASE_SECRET_KEY,
-        "Authorization": f"Bearer {SUPABASE_SECRET_KEY}",
         "Content-Type": "application/json",
         "Prefer": "resolution=merge-duplicates,return=minimal",
     }
+    # Les anciennes clés service_role sont des JWT et nécessitent aussi Authorization.
+    if not SUPABASE_SECRET_KEY.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {SUPABASE_SECRET_KEY}"
     payload = {
         "guild_id": key[0],
         "channel_id": key[1],
