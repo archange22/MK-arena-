@@ -28,8 +28,9 @@ intents.message_content = True
 
 client = discord.Client(intents=intents)
 
-# Historique court, séparé par membre et salon.
-histories = defaultdict(lambda: deque(maxlen=12))
+# Historique partagé par salon : NOVA suit une conversation même si un autre membre intervient.
+# Chaque entrée utilisateur est étiquetée avec le nom Discord de son auteur.
+histories = defaultdict(lambda: deque(maxlen=30))
 last_reply_at = {}
 # Anti-doublon : empêche de traiter deux fois le même message Discord.
 processed_message_ids = deque(maxlen=5000)
@@ -203,6 +204,7 @@ def local_reply(message: str, history=None) -> str:
     )
 
 async def generate_reply(prompt: str, key: tuple) -> str:
+    # La clé représente le salon, pas le membre : tous les participants partagent le même fil.
     history = histories[key]
     if CHATBOT_API_URL and CHATBOT_MODEL and CHATBOT_API_KEY:
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -280,7 +282,9 @@ async def on_message(message: discord.Message):
 
     try:
         async with message.channel.typing():
-            answer = await generate_reply(prompt, (message.guild.id, message.channel.id, message.author.id))
+            speaker = message.author.display_name or message.author.name
+            shared_prompt = f"{speaker}: {prompt}"
+            answer = await generate_reply(shared_prompt, (message.guild.id, message.channel.id))
         await message.reply(answer[:1800], mention_author=False, allowed_mentions=discord.AllowedMentions.none())
     except discord.DiscordException:
         log.exception("Impossible d'envoyer la réponse de NOVA")
