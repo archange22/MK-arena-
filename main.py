@@ -6,6 +6,7 @@ import random
 import difflib
 import unicodedata
 from collections import defaultdict, deque
+from datetime import datetime, timezone
 
 import aiohttp
 import discord
@@ -22,6 +23,8 @@ CHATBOT_API_URL = os.getenv(
 ).strip()
 CHATBOT_API_KEY = os.getenv("GROQ_API_KEY", os.getenv("CHATBOT_API_KEY", "")).strip()
 CHATBOT_MODEL = os.getenv("CHATBOT_MODEL", "openai/gpt-oss-20b").strip()
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://nkhfaptkrenxtogellhv.supabase.co").rstrip("/")
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")).strip()
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -53,6 +56,73 @@ SYSTEM_PROMPT = (
     "Si un message est ambigu, pose une seule question précise. "
     "Réponds en français naturel, chaleureux et facile à comprendre."
 )
+
+
+async def load_persistent_history(key: tuple, history) -> None:
+    """Charge la mémoire partagée du salon depuis Supabase si les secrets sont configurés."""
+    if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+        return
+    headers = {
+        "apikey": SUPABASE_SECRET_KEY,
+        "Authorization": f"Bearer {SUPABASE_SECRET_KEY}",
+        "Accept": "application/json",
+    }
+    params = {
+        "select": "history",
+        "guild_id": f"eq.{key[0]}",
+        "channel_id": f"eq.{key[1]}",
+        "limit": "1",
+    }
+    try:
+        timeout = aiohttp.ClientTimeout(total=8)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(
+                f"{SUPABASE_URL}/rest/v1/mk_nova_conversations",
+                headers=headers,
+                params=params,
+            ) as response:
+                if response.status != 200:
+                    log.warning("Mémoire Supabase indisponible (lecture HTTP %s).", response.status)
+                    return
+                rows = await response.json()
+                if rows and isinstance(rows[0].get("history"), list):
+                    history.clear()
+                    for item in rows[0]["history"][-30:]:
+                        if isinstance(item, dict) and item.get("role") in ("user", "assistant") and isinstance(item.get("content"), str):
+                            history.append({"role": item["role"], "content": item["content"][:1800]})
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, TypeError):
+        log.warning("Impossible de charger la mémoire Supabase; mémoire en RAM conservée.", exc_info=True)
+
+
+async def save_persistent_history(key: tuple, history) -> None:
+    """Enregistre uniquement les 30 derniers messages du fil partagé."""
+    if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+        return
+    headers = {
+        "apikey": SUPABASE_SECRET_KEY,
+        "Authorization": f"Bearer {SUPABASE_SECRET_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates,return=minimal",
+    }
+    payload = {
+        "guild_id": key[0],
+        "channel_id": key[1],
+        "history": list(history)[-30:],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        timeout = aiohttp.ClientTimeout(total=8)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                f"{SUPABASE_URL}/rest/v1/mk_nova_conversations?on_conflict=guild_id,channel_id",
+                headers=headers,
+                json=payload,
+            ) as response:
+                if response.status not in (200, 201, 204):
+                    details = (await response.text())[:240]
+                    log.warning("Mémoire Supabase indisponible (écriture HTTP %s): %s", response.status, details)
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, TypeError):
+        log.warning("Impossible d'enregistrer la mémoire Supabase.", exc_info=True)
 
 
 def normalize_text(value: str) -> str:
@@ -241,15 +311,15 @@ def local_reply(message: str, history=None) -> str:
     )
 
 async def generate_reply(prompt: str, key: tuple) -> str:
-    # La clé représente le salon, pas le membre : tous les participants partagent le même fil.
+    # Le fil est commun à tous les membres du même salon Discord.
     history = histories[key]
+    await load_persistent_history(key, history)
+
     if CHATBOT_API_URL and CHATBOT_MODEL and CHATBOT_API_KEY:
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages.extend(list(history))
         messages.append({"role": "user", "content": prompt[:1800]})
-        headers = {"Content-Type": "application/json"}
-        if CHATBOT_API_KEY:
-            headers["Authorization"] = f"Bearer {CHATBOT_API_KEY}"
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {CHATBOT_API_KEY}"}
         try:
             timeout = aiohttp.ClientTimeout(total=25)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -269,6 +339,7 @@ async def generate_reply(prompt: str, key: tuple) -> str:
                         if answer:
                             history.append({"role": "user", "content": prompt[:1800]})
                             history.append({"role": "assistant", "content": answer[:1800]})
+                            await save_persistent_history(key, history)
                             return answer[:1800]
                     else:
                         details = (await response.text())[:300]
@@ -279,6 +350,7 @@ async def generate_reply(prompt: str, key: tuple) -> str:
     answer = local_reply(prompt, history)
     history.append({"role": "user", "content": prompt[:1800]})
     history.append({"role": "assistant", "content": answer[:1800]})
+    await save_persistent_history(key, history)
     return answer[:1800]
 
 
