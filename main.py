@@ -47,6 +47,9 @@ SYSTEM_PROMPT = (
     "Pour les questions complexes, organise la réponse avec de petits paragraphes ou des listes. "
     "Pour une question simple ou une salutation, reste naturel sans faire un long discours. "
     "Tiens compte de l'historique partagé du salon et distingue les membres grâce à leur nom. "
+    "Relie les questions courtes au contexte récent du salon, même si un autre membre intervient. "
+    "Si le sujet change clairement, suis le nouveau sujet. "
+    "Pour les demandes complexes, explique les étapes et donne un exemple concret. "
     "Si un message est ambigu, pose une seule question précise. "
     "Réponds en français naturel, chaleureux et facile à comprendre."
 )
@@ -229,7 +232,7 @@ async def generate_reply(prompt: str, key: tuple) -> str:
                         "model": CHATBOT_MODEL,
                         "messages": messages,
                         "temperature": 0.7,
-                        "max_tokens": 700,
+                        "max_tokens": 900,
                     },
                 ) as response:
                     if response.status == 200:
